@@ -1,0 +1,940 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OpsPilot — Procurement Intelligence</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link
+        href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Fraunces:opsz,wght@9..144,300;9..144,600;9..144,700&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="/static/dashboard.css" />
+</head>
+
+<body>
+
+    <!-- ══════════════════════════ LOGIN ══════════════════════════ -->
+    <div id="loginScreen">
+        <div class="login-card">
+            <div class="login-logo">
+                <div class="logo-icon">⚡</div>
+                <div>
+                    <div class="logo-name">OpsPilot</div>
+                    <span class="logo-tag">Procurement Intelligence</span>
+                </div>
+            </div>
+            <div class="login-heading">Welcome back</div>
+            <div class="login-sub">Sign in to access your procurement dashboard</div>
+
+            <div class="field">
+                <label for="loginName">Full Name</label>
+                <input id="loginName" type="text" placeholder="e.g. Gowshik Kumar" autocomplete="off" />
+            </div>
+            <div class="field">
+                <label for="loginId">Employee ID</label>
+                <input id="loginId" type="text" placeholder="e.g. EMP-001" autocomplete="off" />
+            </div>
+
+            <button class="login-btn" onclick="doLogin()">Enter Dashboard →</button>
+            <div id="loginErr" class="login-err hidden">Please enter your name and employee ID.</div>
+        </div>
+    </div>
+
+    <!-- ══════════════════════════ APP ══════════════════════════ -->
+    <div id="appShell">
+
+        <!-- SIDEBAR -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sb-head">
+                <div class="brand">
+                    <div class="brand-mark">⚡</div>
+                    <div class="brand-text">
+                        <div class="brand-title">OpsPilot</div>
+                        <div class="brand-ver">v2.0</div>
+                    </div>
+                </div>
+                <button class="toggle-btn" onclick="toggleSidebar()">☰</button>
+            </div>
+
+            <div class="user-badge">
+                <div class="ub-avatar" id="ubAvatar">?</div>
+                <div class="ub-info">
+                    <div class="ub-name" id="ubName">—</div>
+                    <div class="ub-role">Procurement Officer</div>
+                </div>
+            </div>
+
+            <div class="sb-section-label">Navigation</div>
+            <div class="sidebar-nav">
+                <button class="nav-btn active" data-page="dashboard" onclick="showPage('dashboard')">
+                    <span class="nav-ico">📊</span><span class="nav-label">Dashboard</span>
+                </button>
+                <button class="nav-btn" data-page="suppliers" onclick="showPage('suppliers')">
+                    <span class="nav-ico">🏭</span><span class="nav-label">Suppliers</span>
+                </button>
+                <button class="nav-btn" data-page="invoices" onclick="showPage('invoices')">
+                    <span class="nav-ico">🧾</span><span class="nav-label">Invoices</span>
+                </button>
+                <button class="nav-btn" data-page="reports" onclick="showPage('reports')">
+                    <span class="nav-ico">📈</span><span class="nav-label">Reports</span>
+                </button>
+                <button class="nav-btn" data-page="alerts" onclick="showPage('alerts')">
+                    <span class="nav-ico">🔔</span><span class="nav-label">Alerts</span>
+                </button>
+                <button class="nav-btn" data-page="assistant" onclick="showPage('assistant')">
+                    <span class="nav-ico">💬</span><span class="nav-label">AI Assistant</span>
+                </button>
+            </div>
+
+            <div class="sb-foot">
+                <div class="sb-foot-inner">
+                    <div class="pulse-dot"></div>
+                    <div class="sb-foot-text" id="statusText">Agent Online</div>
+                </div>
+                <button class="gmail-btn" onclick="openGmailModal()">
+                    <span>📧</span><span class="nav-label">Gmail Setup</span>
+                </button>
+            </div>
+        </aside>
+
+        <!-- MAIN -->
+        <div class="main">
+
+            <!-- TOPBAR -->
+            <div class="topbar">
+                <div class="tb-title" id="tbTitle">Dashboard</div>
+                <div class="tb-pill" id="tbPill">Overview</div>
+                <div class="tb-right">
+                    <button class="tb-btn" id="refreshBtn" onclick="refreshCurrentPage()">↻ Refresh</button>
+                    <button class="tb-btn" onclick="doLogout()">Logout</button>
+                </div>
+            </div>
+
+            <!-- PAGE CONTAINER -->
+            <div class="page-container" id="pageContainer">
+
+                <!-- ── DASHBOARD ── -->
+                <div class="page active" id="dashboardPage">
+                    <div class="hero-bar">
+                        <h2 id="heroGreet">Good morning ⚡</h2>
+                        <p>Here's your procurement snapshot for today.</p>
+                    </div>
+
+                    <div class="stats-grid">
+                        <div class="card stat-card">
+                            <div class="stat-label">Suppliers</div>
+                            <div class="stat-value" id="statSuppliers">—</div>
+                            <div class="stat-sub">Active vendors</div>
+                        </div>
+                        <div class="card stat-card">
+                            <div class="stat-label">Invoices</div>
+                            <div class="stat-value" id="statInvoices">—</div>
+                            <div class="stat-sub">Logged</div>
+                        </div>
+                        <div class="card stat-card">
+                            <div class="stat-label">Total Spend</div>
+                            <div class="stat-value" id="statSpend">—</div>
+                            <div class="stat-sub">All time</div>
+                        </div>
+                        <div class="card stat-card">
+                            <div class="stat-label">Open Alerts</div>
+                            <div class="stat-value" id="statAlerts">—</div>
+                            <div class="stat-sub">Pending action</div>
+                        </div>
+                    </div>
+
+                    <div class="dash-bottom">
+                        <div class="card mini-card">
+                            <h4>Quick Actions</h4>
+                            <div class="quick-actions">
+                                <button class="qa-btn" onclick="showPage('assistant');sendChip('List all suppliers')">📋
+                                    List Suppliers</button>
+                                <button class="qa-btn"
+                                    onclick="showPage('assistant');sendChip('Show pending requirements')">⏳ Pending
+                                    Items</button>
+                                <button class="qa-btn"
+                                    onclick="showPage('assistant');sendChip('What are the PPE requirements?')">🦺 PPE
+                                    Guide</button>
+                                <button class="qa-btn"
+                                    onclick="showPage('assistant');sendChip('Search web for transformer oil price')">🌐
+                                    Market Price</button>
+                                <button class="qa-btn" onclick="showPage('assistant');sendChip('Show spend summary')">💰
+                                    Spend Report</button>
+                                <button class="qa-btn"
+                                    onclick="showPage('assistant');sendChip('Check urgent alerts')">🚨 Urgent
+                                    Alerts</button>
+                            </div>
+                        </div>
+                        <div class="card mini-card">
+                            <h4>Top Supplier</h4>
+                            <div class="recent-list">
+                                <div class="recent-item">
+                                    <span id="topSupplierDash">Loading...</span>
+                                    <span>By volume</span>
+                                </div>
+                                <div class="recent-item">
+                                    <span id="openAlertsDash">— alerts open</span>
+                                    <span>Procurement</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ── SUPPLIERS ── -->
+                <div class="page" id="suppliersPage">
+                    <div class="section-bar">
+                        <h2>Supplier Directory</h2>
+                        <div class="sec-actions">
+                            <button class="tb-btn" onclick="loadSuppliers()">↻ Refresh</button>
+                        </div>
+                    </div>
+                    <div class="search-row">
+                        <input id="supplierSearch" type="text" placeholder="Search by name, city, category, email…"
+                            onkeydown="handleSupplierKey(event)" />
+                        <button class="tb-btn" onclick="searchSuppliers()">Search</button>
+                    </div>
+                    <div class="table-wrap card">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Supplier Name</th>
+                                    <th>Phone</th>
+                                    <th>Email</th>
+                                    <th>City</th>
+                                    <th>Category</th>
+                                </tr>
+                            </thead>
+                        </table>
+                        <div id="supplierResults">
+                            <div class="loading-row"></div>
+                            <div class="loading-row" style="width:80%"></div>
+                            <div class="loading-row" style="width:90%"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ── INVOICES ── -->
+                <div class="page" id="invoicesPage">
+                    <div class="section-bar">
+                        <h2>Invoices</h2>
+                        <div class="sec-actions">
+                            <button class="tb-btn" onclick="loadInvoices()">↻ Refresh</button>
+                        </div>
+                    </div>
+
+                    <label class="upload-zone">
+                        📎 Click to upload invoice (PDF)
+                        <input type="file" accept=".pdf,.png,.jpg" style="display:none"
+                            onchange="uploadInvoice(this)" />
+                    </label>
+
+                    <div class="card" style="overflow:hidden">
+                        <div id="invoiceList">
+                            <div class="loading-row" style="margin:12px"></div>
+                            <div class="loading-row" style="margin:12px;width:70%"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ── REPORTS ── -->
+                <div class="page" id="reportsPage">
+                    <div class="section-bar">
+                        <h2>Procurement Reports</h2>
+                        <div class="sec-actions">
+                            <button class="tb-btn" onclick="loadReports()">↻ Refresh</button>
+                        </div>
+                    </div>
+
+                    <div class="stats-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:18px">
+                        <div class="card stat-card">
+                            <div class="stat-label">Total Spend</div>
+                            <div class="stat-value" id="totalSpend">—</div>
+                        </div>
+                        <div class="card stat-card">
+                            <div class="stat-label">Total Orders</div>
+                            <div class="stat-value" id="totalOrders">—</div>
+                        </div>
+                        <div class="card stat-card">
+                            <div class="stat-label">Top Supplier</div>
+                            <div class="stat-value" style="font-size:16px;margin-top:6px" id="topSupplier">—</div>
+                        </div>
+                    </div>
+
+                    <div class="card" style="padding:20px">
+                        <div class="dp-section-title">Category Breakdown</div>
+                        <div class="report-pre" id="categorySpend">Loading…</div>
+                    </div>
+                </div>
+
+                <!-- ── ALERTS ── -->
+                <div class="page" id="alertsPage">
+                    <div class="section-bar">
+                        <h2>Active Alerts</h2>
+                        <div class="sec-actions">
+                            <button class="tb-btn" onclick="loadAlerts()">↻ Refresh</button>
+                        </div>
+                    </div>
+                    <div class="card" style="overflow:hidden">
+                        <div id="alertsList">
+                            <div class="loading-row" style="margin:12px"></div>
+                            <div class="loading-row" style="margin:12px;width:60%"></div>
+                        </div>
+                    </div>
+                </div>
+
+            </div><!-- /page-container -->
+
+            <!-- ── ASSISTANT (outside page-container for full height) ── -->
+            <div id="assistantPage">
+                <div class="chat-messages" id="chatBox">
+                    <div class="chat-welcome" id="chatWelcome">
+                        <div class="cw-icon">⚡</div>
+                        <h3 id="chatGreetName">Hello!</h3>
+                        <p>Ask me about suppliers, invoices, safety procedures — or let me search the web and email
+                            suppliers on your behalf.</p>
+                        <div class="chat-chips">
+                            <button class="chip" onclick="sendChip('List all suppliers')">📋 Suppliers</button>
+                            <button class="chip" onclick="sendChip('Show pending requirements')">⏳ Pending</button>
+                            <button class="chip" onclick="sendChip('What are the PPE requirements?')">🦺 PPE
+                                Guide</button>
+                            <button class="chip" onclick="sendChip('Search web for transformer oil market price')">🌐
+                                Web Search</button>
+                            <button class="chip" onclick="sendChip('Show spend summary')">💰 Spend</button>
+                            <button class="chip"
+                                onclick="sendChip('What are the safety procedures for outage restoration?')">📋 Outage
+                                SOP</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="chat-input-bar">
+                    <div class="chat-input-row">
+                        <textarea class="chat-ta" id="userInput" rows="1"
+                            placeholder="Ask anything — or say 'send email to [supplier] about [topic]'…"></textarea>
+                        <button class="send-btn" id="sendBtn" onclick="sendMessage()">➤</button>
+                    </div>
+                    <div class="chat-hints">
+                        <span class="c-hint"><b>tip:</b> "send email to ABC Suppliers about transformer oil"</span>
+                        <span class="c-hint"><b>tip:</b> "search web for cable price 2025"</span>
+                    </div>
+                </div>
+            </div>
+
+        </div><!-- /main -->
+    </div><!-- /appShell -->
+
+    <!-- SUPPLIER DETAIL PANEL -->
+    <div class="detail-panel" id="supplierDetail"></div>
+
+    <!-- GMAIL MODAL -->
+    <div class="modal-bg" id="gmailModal" onclick="if(event.target===this)closeGmailModal()">
+        <div class="modal-box">
+            <button class="modal-close" onclick="closeGmailModal()">✕</button>
+            <div class="modal-title">📧 Gmail Integration</div>
+            <div class="modal-sub">Connect your Gmail to let OpsPilot send supplier emails.</div>
+            <div id="gmailConnected" class="connected-pill hidden">✓ Gmail Connected</div>
+            <div class="field">
+                <label>Gmail Address</label>
+                <input id="gmailInput" type="email" placeholder="you@gmail.com" />
+            </div>
+            <div class="field">
+                <label>App Password</label>
+                <input id="gmailPass" type="password" placeholder="16-character app password" />
+            </div>
+            <button class="modal-btn" onclick="setupGmail()">Connect Gmail</button>
+        </div>
+    </div>
+
+    <!-- TOAST STACK -->
+    <div class="toast-stack" id="toastStack"></div>
+
+    <script>
+        /* ══════════════════════════════════════════
+           STATE
+        ══════════════════════════════════════════ */
+        var appState = {
+            currentPage: "dashboard",
+            currentUser: null,
+            suppliers: [],
+            supplierFilter: "",
+            selectedSupplierKey: null,
+            currentSupplierIndex: -1,
+            invoices: [],
+            reports: null,
+            alerts: [],
+            currentSupplierRows: [],
+            chatWaiting: false
+        };
+
+        /* ══════════════════════════════════════════
+           LOGIN / LOGOUT
+        ══════════════════════════════════════════ */
+        function doLogin() {
+            var name = document.getElementById("loginName").value.trim();
+            var id = document.getElementById("loginId").value.trim();
+            if (!name || !id) {
+                document.getElementById("loginErr").classList.remove("hidden");
+                return;
+            }
+
+            appState.currentUser = { name: name, id: id };
+
+            // Update sidebar
+            document.getElementById("ubName").textContent = name;
+            document.getElementById("ubAvatar").textContent = name[0].toUpperCase();
+
+            // Update chat greeting
+            document.getElementById("chatGreetName").textContent = "Hey, " + name.split(" ")[0] + " 👋";
+
+            // Update hero
+            var h = new Date().getHours();
+            var greeting = h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
+            document.getElementById("heroGreet").textContent = greeting + ", " + name.split(" ")[0] + " ⚡";
+
+            // Animate out login
+            var ls = document.getElementById("loginScreen");
+            ls.classList.add("out");
+            setTimeout(function () { ls.style.display = "none"; }, 580);
+
+            // Animate in app
+            var app = document.getElementById("appShell");
+            app.classList.add("live");
+
+            // Bootstrap data
+            bootstrap();
+            checkHealth();
+        }
+
+        document.addEventListener("keydown", function (e) {
+            if (e.key === "Enter" && document.getElementById("loginScreen").style.display !== "none" && !document.getElementById("loginScreen").classList.contains("out")) {
+                doLogin();
+            }
+        });
+
+        function doLogout() {
+            appState.currentUser = null;
+            var ls = document.getElementById("loginScreen");
+            ls.style.display = "flex";
+            ls.classList.remove("out");
+            document.getElementById("appShell").classList.remove("live");
+            document.getElementById("loginName").value = "";
+            document.getElementById("loginId").value = "";
+            document.getElementById("loginErr").classList.add("hidden");
+            document.getElementById("chatBox").innerHTML = buildWelcomeHtml();
+        }
+
+        /* ══════════════════════════════════════════
+           NAVIGATION
+        ══════════════════════════════════════════ */
+        var pageMeta = {
+            dashboard: ["Dashboard", "Overview"],
+            suppliers: ["Supplier Directory", "Data"],
+            invoices: ["Invoices", "Finance"],
+            reports: ["Reports", "Analytics"],
+            alerts: ["Alerts", "Monitor"],
+            assistant: ["AI Assistant", "Chat"]
+        };
+
+        function showPage(page) {
+            // Hide all normal pages
+            var pages = document.querySelectorAll(".page");
+            for (var i = 0; i < pages.length; i++) { pages[i].classList.remove("active"); }
+
+            // Handle assistant separately (outside page-container)
+            var assistantEl = document.getElementById("assistantPage");
+            var container = document.getElementById("pageContainer");
+
+            if (page === "assistant") {
+                container.style.display = "none";
+                assistantEl.classList.add("active");
+            } else {
+                container.style.display = "";
+                assistantEl.classList.remove("active");
+                var target = document.getElementById(page + "Page");
+                if (target) target.classList.add("active");
+            }
+
+            appState.currentPage = page;
+
+            // Nav buttons
+            var btns = document.querySelectorAll(".nav-btn");
+            for (var j = 0; j < btns.length; j++) {
+                btns[j].classList.toggle("active", btns[j].getAttribute("data-page") === page);
+            }
+
+            // Topbar
+            var meta = pageMeta[page] || [page, ""];
+            document.getElementById("tbTitle").textContent = meta[0];
+            document.getElementById("tbPill").textContent = meta[1];
+
+            // Load data
+            if (page === "suppliers") { if (!appState.suppliers.length) loadSuppliers(); else searchSuppliers(); }
+            if (page === "invoices") loadInvoices();
+            if (page === "reports") loadReports();
+            if (page === "alerts") loadAlerts();
+            if (page === "assistant") { document.getElementById("userInput").focus(); }
+        }
+
+        function toggleSidebar() {
+            document.getElementById("sidebar").classList.toggle("collapsed");
+        }
+
+        /* ══════════════════════════════════════════
+           SUPPLIER HELPERS
+        ══════════════════════════════════════════ */
+        function safeText(v) { return v === null || v === undefined ? "" : String(v); }
+
+        function supplierKey(s) {
+            var id = safeText(s.Supplier_ID || s.SupplierId || s.ID);
+            if (id) return "id:" + id;
+            return "name:" + safeText(s.Supplier_Name || s.Name || s["Supplier Name"]) +
+                "|phone:" + safeText(s.Phone || s["Phone Number"] || s.Mobile) +
+                "|email:" + safeText(s.Email || s.Gmail || s["Email Address"]);
+        }
+        function getDisplayName(s) { return safeText(s.Supplier_Name || s.Name || s["Supplier Name"] || "Unknown"); }
+        function getPhone(s) { return safeText(s.Phone || s["Phone Number"] || s.Mobile || "—"); }
+        function getEmail(s) { return safeText(s.Email || s.Gmail || s["Email Address"] || "—"); }
+        function getCity(s) { return safeText(s.City || s.Location || "—"); }
+        function getCategory(s) { return safeText(s.Category || s.Type || "—"); }
+        function getRating(s) { return safeText(s.Rating || "—"); }
+        function getLeadTime(s) { return safeText(s.Lead_Time_Days || s["Lead Time"] || "—"); }
+        function getNotesKey(s) { return "opspilot_notes_" + supplierKey(s); }
+
+        function loadSupplierNotes(s) {
+            try { var r = localStorage.getItem(getNotesKey(s)); return r ? JSON.parse(r) : []; } catch (e) { return []; }
+        }
+        function saveSupplierNotes(s, notes) {
+            localStorage.setItem(getNotesKey(s), JSON.stringify(notes));
+        }
+
+        /* ══════════════════════════════════════════
+           SUPPLIER RENDER
+        ══════════════════════════════════════════ */
+        function renderSuppliersTable(list) {
+            var container = document.getElementById("supplierResults");
+            if (!container) return;
+            appState.currentSupplierRows = list.slice();
+            container.innerHTML = "";
+
+            if (!list.length) {
+                container.innerHTML = '<div class="empty-state">No suppliers found.</div>';
+                return;
+            }
+
+            var table = document.createElement("table");
+            table.className = "data-table";
+            table.style.width = "100%";
+
+            for (var i = 0; i < list.length; i++) {
+                (function (idx) {
+                    var s = list[idx];
+                    var tr = document.createElement("tr");
+                    tr.innerHTML =
+                        "<td><strong style='color:var(--snow)'>" + getDisplayName(s) + "</strong></td>" +
+                        "<td>" + getPhone(s) + "</td>" +
+                        "<td style='color:var(--fog);font-size:11px'>" + getEmail(s) + "</td>" +
+                        "<td>" + getCity(s) + "</td>" +
+                        "<td>" + getCategory(s) + "</td>";
+                    tr.onclick = function () {
+                        document.querySelectorAll("#supplierResults tr").forEach(function (r) { r.classList.remove("selected"); });
+                        tr.classList.add("selected");
+                        renderSupplierDetail(s, idx);
+                    };
+                    table.appendChild(tr);
+                })(i);
+            }
+            container.appendChild(table);
+
+            // Auto-open first
+            if (list.length && !document.getElementById("supplierDetail").classList.contains("open")) {
+                renderSupplierDetail(list[0], 0);
+            }
+        }
+
+        function renderSupplierDetail(s, index) {
+            var panel = document.getElementById("supplierDetail");
+            if (!panel || !s) return;
+
+            appState.selectedSupplierKey = supplierKey(s);
+            appState.currentSupplierIndex = index;
+
+            var notes = loadSupplierNotes(s);
+            var notesHtml = notes.map(function (n) { return '<div class="note-item">• ' + n + '</div>'; }).join("");
+
+            panel.innerHTML =
+                '<div class="dp-name">' + getDisplayName(s) + '</div>' +
+                row("Phone", getPhone(s)) +
+                row("Email", getEmail(s)) +
+                row("City", getCity(s)) +
+                row("Category", getCategory(s)) +
+                row("Rating", getRating(s)) +
+                row("Lead Time", getLeadTime(s)) +
+                '<div class="dp-section-title">Notes</div>' +
+                '<textarea class="dp-textarea" id="noteInput" placeholder="Add a note…"></textarea>' +
+                '<button class="dp-btn" onclick="saveNote(' + index + ')">Save Note</button>' +
+                '<button class="dp-close-btn" onclick="closePanel()">Close</button>' +
+                '<div id="notesList">' + notesHtml + '</div>';
+
+            panel.classList.add("open");
+        }
+
+        function row(key, val) {
+            return '<div class="dp-row"><span class="dp-key">' + key + '</span><span class="dp-val">' + val + '</span></div>';
+        }
+
+        function saveNote(index) {
+            var s = appState.currentSupplierRows[index];
+            if (!s) return;
+            var input = document.getElementById("noteInput");
+            if (!input || !input.value.trim()) return;
+            var notes = loadSupplierNotes(s);
+            notes.unshift(input.value.trim());
+            saveSupplierNotes(s, notes);
+            input.value = "";
+            renderSupplierDetail(s, index);
+            toast("Note saved", "ok");
+        }
+
+        function closePanel() {
+            document.getElementById("supplierDetail").classList.remove("open");
+        }
+
+        function handleSupplierKey(e) { if (e.key === "Enter") searchSuppliers(); }
+
+        async function loadSuppliers() {
+            var c = document.getElementById("supplierResults");
+            c.innerHTML = '<div class="loading-row"></div><div class="loading-row" style="width:70%"></div>';
+            try {
+                var res = await fetch("/suppliers");
+                var data = await res.json();
+                appState.suppliers = Array.isArray(data) ? data : [];
+                searchSuppliers();
+                updateDashboardStats();
+            } catch (e) {
+                c.innerHTML = '<div class="empty-state">Unable to load suppliers.</div>';
+            }
+        }
+
+        function searchSuppliers() {
+            var input = document.getElementById("supplierSearch");
+            var q = input ? input.value.trim().toLowerCase() : "";
+            var filtered = appState.suppliers.filter(function (s) {
+                return !q || [getDisplayName(s), getPhone(s), getEmail(s), getCity(s), getCategory(s)].join(" ").toLowerCase().includes(q);
+            });
+            renderSuppliersTable(filtered);
+        }
+
+        /* ══════════════════════════════════════════
+           INVOICES
+        ══════════════════════════════════════════ */
+        async function loadInvoices() {
+            var c = document.getElementById("invoiceList");
+            if (!c) return;
+            c.innerHTML = '<div class="loading-row" style="margin:12px"></div>';
+            try {
+                var res = await fetch("/invoices");
+                var data = await res.json();
+                appState.invoices = Array.isArray(data) ? data : [];
+                c.innerHTML = "";
+                if (!appState.invoices.length) {
+                    c.innerHTML = '<div class="empty-state">No invoices uploaded yet.</div>';
+                    return;
+                }
+                appState.invoices.forEach(function (item) {
+                    var div = document.createElement("div");
+                    div.className = "data-row";
+                    div.innerHTML =
+                        '<div><strong>' + safeText(item.vendor_name || item.filename || "Invoice") + '</strong><br><span class="muted">' + safeText(item.filename || "") + '</span></div>' +
+                        '<div>₹' + safeText(item.amount || "—") + '</div>' +
+                        '<div class="muted">' + safeText(item.created_at || "") + '</div>';
+                    c.appendChild(div);
+                });
+                updateDashboardStats();
+            } catch (e) {
+                c.innerHTML = '<div class="empty-state">Unable to load invoices.</div>';
+            }
+        }
+
+        async function uploadInvoice(inputEl) {
+            if (!inputEl || !inputEl.files || !inputEl.files.length) return;
+            var file = inputEl.files[0];
+            var form = new FormData();
+            form.append("file", file);
+            try {
+                var res = await fetch("/upload-invoice", { method: "POST", body: form });
+                var data = await res.json();
+                toast("Uploaded: " + safeText((data.parsed && data.parsed.vendor_name) || file.name), "ok");
+                await loadInvoices();
+                await loadReports();
+            } catch (e) { toast("Upload failed", "err"); }
+        }
+
+        /* ══════════════════════════════════════════
+           REPORTS
+        ══════════════════════════════════════════ */
+        async function loadReports() {
+            try {
+                var res = await fetch("/reports");
+                var data = await res.json();
+                appState.reports = data;
+                var fmt = function (n) { return "₹" + Number(n || 0).toLocaleString("en-IN"); };
+                setText("totalSpend", fmt(data.total_spend));
+                setText("totalOrders", safeText(data.total_orders || 0));
+                setText("topSupplier", safeText(data.top_supplier || "—"));
+                setText("categorySpend", safeText(data.category_breakdown || "No breakdown available."));
+                setText("topSupplierDash", safeText(data.top_supplier || "—"));
+                updateDashboardStats();
+            } catch (e) {
+                setText("categorySpend", "Unable to load reports.");
+            }
+        }
+
+        /* ══════════════════════════════════════════
+           ALERTS
+        ══════════════════════════════════════════ */
+        async function loadAlerts() {
+            var c = document.getElementById("alertsList");
+            if (!c) return;
+            c.innerHTML = '<div class="loading-row" style="margin:12px"></div>';
+            try {
+                var res = await fetch("/alerts");
+                var data = await res.json();
+                var alerts = data.alerts || [];
+                appState.alerts = alerts;
+                c.innerHTML = "";
+                if (!alerts.length) {
+                    c.innerHTML = '<div class="empty-state">No alerts. All clear.</div>';
+                    return;
+                }
+                alerts.forEach(function (a) {
+                    var div = document.createElement("div");
+                    div.className = "data-row";
+                    var level = (a.level || "").toLowerCase();
+                    div.innerHTML =
+                        '<div><span class="badge badge-' + level + '">' + safeText(a.level || "Alert") + '</span></div>' +
+                        '<div>' + safeText(a.message || "") + '</div>' +
+                        '<div class="muted">Procurement</div>';
+                    c.appendChild(div);
+                });
+                setText("openAlertsDash", alerts.length + " alert" + (alerts.length === 1 ? "" : "s") + " open");
+                setText("statAlerts", safeText(alerts.length));
+            } catch (e) {
+                c.innerHTML = '<div class="empty-state">Unable to load alerts.</div>';
+            }
+        }
+
+        /* ══════════════════════════════════════════
+           DASHBOARD STATS
+        ══════════════════════════════════════════ */
+        function updateDashboardStats() {
+            setText("statSuppliers", safeText(appState.suppliers.length));
+            setText("statInvoices", safeText(appState.invoices.length));
+            if (appState.reports && appState.reports.total_spend !== undefined) {
+                setText("statSpend", "₹" + Number(appState.reports.total_spend).toLocaleString("en-IN"));
+            }
+        }
+
+        /* ══════════════════════════════════════════
+           CHAT
+        ══════════════════════════════════════════ */
+        function buildWelcomeHtml() {
+            return '<div class="chat-welcome" id="chatWelcome">' +
+                '<div class="cw-icon">⚡</div>' +
+                '<h3 id="chatGreetName">Hello!</h3>' +
+                '<p>Ask me about suppliers, invoices, safety procedures — or let me search the web and email suppliers on your behalf.</p>' +
+                '<div class="chat-chips">' +
+                '<button class="chip" onclick="sendChip(\'List all suppliers\')">📋 Suppliers</button>' +
+                '<button class="chip" onclick="sendChip(\'Show pending requirements\')">⏳ Pending</button>' +
+                '<button class="chip" onclick="sendChip(\'What are the PPE requirements?\')">🦺 PPE Guide</button>' +
+                '<button class="chip" onclick="sendChip(\'Search web for transformer oil market price\')">🌐 Web Search</button>' +
+                '<button class="chip" onclick="sendChip(\'Show spend summary\')">💰 Spend</button>' +
+                '<button class="chip" onclick="sendChip(\'What are the safety procedures for outage restoration?\')">📋 Outage SOP</button>' +
+                '</div></div>';
+        }
+
+        function handleChatKey(e) { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }
+
+        function sendChip(text) {
+            // Navigate to assistant if not there
+            if (appState.currentPage !== "assistant") showPage("assistant");
+            setTimeout(function () {
+                document.getElementById("userInput").value = text;
+                sendMessage();
+            }, 80);
+        }
+
+        async function sendMessage() {
+            var input = document.getElementById("userInput");
+            var chat = document.getElementById("chatBox");
+            if (!input || !chat || appState.chatWaiting) return;
+
+            var text = input.value.trim();
+            if (!text) return;
+
+            // Remove welcome
+            var wm = document.getElementById("chatWelcome");
+            if (wm) wm.remove();
+
+            // User bubble
+            appendMsg(chat, "user", text);
+            input.value = "";
+            input.style.height = "auto";
+
+            // Typing indicator
+            var typingId = "typing_" + Date.now();
+            var typingEl = document.createElement("div");
+            typingEl.className = "chat-msg ai";
+            typingEl.id = typingId;
+            typingEl.innerHTML =
+                '<div class="msg-ava">⚡</div>' +
+                '<div class="typing-bub"><div class="t-dot"></div><div class="t-dot"></div><div class="t-dot"></div></div>';
+            chat.appendChild(typingEl);
+            chat.scrollTop = chat.scrollHeight;
+
+            appState.chatWaiting = true;
+            document.getElementById("sendBtn").disabled = true;
+
+            try {
+                var res = await fetch("/chat", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        user_name: appState.currentUser ? appState.currentUser.name : "user",
+                        message: text
+                    })
+                });
+                var data = await res.json();
+                var el = document.getElementById(typingId);
+                if (el) el.remove();
+                appendMsg(chat, "ai", safeText(data.response || data.reply || "No response received."));
+
+                if (data.response && data.response.includes("✅")) toast("Email sent!", "ok");
+
+            } catch (e) {
+                var el2 = document.getElementById(typingId);
+                if (el2) el2.remove();
+                appendMsg(chat, "ai", "⚠️ Connection error. Is the server running?");
+                toast("Request failed", "err");
+            } finally {
+                appState.chatWaiting = false;
+                document.getElementById("sendBtn").disabled = false;
+            }
+        }
+
+        function appendMsg(chat, role, text) {
+            var div = document.createElement("div");
+            div.className = "chat-msg " + role;
+            var avatar = role === "user"
+                ? '<div class="msg-ava">' + (appState.currentUser ? appState.currentUser.name[0].toUpperCase() : "U") + '</div>'
+                : '<div class="msg-ava">⚡</div>';
+            var bubble = document.createElement("div");
+            bubble.className = "chat-bubble";
+            bubble.textContent = text;
+            div.innerHTML = avatar;
+            div.appendChild(bubble);
+            chat.appendChild(div);
+            chat.scrollTop = chat.scrollHeight;
+        }
+
+        // Auto-resize textarea
+        document.addEventListener("DOMContentLoaded", function () {
+            var ta = document.getElementById("userInput");
+            if (ta) {
+                ta.addEventListener("keydown", handleChatKey);
+                ta.addEventListener("input", function () {
+                    ta.style.height = "auto";
+                    ta.style.height = Math.min(ta.scrollHeight, 130) + "px";
+                });
+            }
+            var si = document.getElementById("supplierSearch");
+            if (si) si.addEventListener("input", searchSuppliers);
+        });
+
+        /* ══════════════════════════════════════════
+           GMAIL
+        ══════════════════════════════════════════ */
+        function openGmailModal() { document.getElementById("gmailModal").classList.add("open"); }
+        function closeGmailModal() { document.getElementById("gmailModal").classList.remove("open"); }
+
+        async function setupGmail() {
+            var gmail = document.getElementById("gmailInput").value.trim();
+            var pass = document.getElementById("gmailPass").value.trim();
+            if (!gmail || !pass) { toast("Fill in both fields", "err"); return; }
+            try {
+                var res = await fetch("/gmail-setup", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ gmail: gmail, app_password: pass })
+                });
+                var data = await res.json();
+                if (data.status === "connected") {
+                    document.getElementById("gmailConnected").classList.remove("hidden");
+                    setText("statusText", "Gmail: " + gmail);
+                    toast("Gmail connected!", "ok");
+                    closeGmailModal();
+                } else {
+                    toast("Connection failed", "err");
+                }
+            } catch (e) { toast("Error: " + e.message, "err"); }
+        }
+
+        /* ══════════════════════════════════════════
+           HEALTH CHECK
+        ══════════════════════════════════════════ */
+        async function checkHealth() {
+            try {
+                var res = await fetch("/health");
+                var data = await res.json();
+                if (data.gmail_connected) {
+                    setText("statusText", data.gmail || "Gmail connected");
+                    document.getElementById("gmailConnected").classList.remove("hidden");
+                }
+            } catch (e) { /* offline */ }
+        }
+
+        /* ══════════════════════════════════════════
+           REFRESH
+        ══════════════════════════════════════════ */
+        function refreshCurrentPage() {
+            var p = appState.currentPage;
+            if (p === "suppliers") { loadSuppliers(); return; }
+            if (p === "invoices") { loadInvoices(); return; }
+            if (p === "reports") { loadReports(); return; }
+            if (p === "alerts") { loadAlerts(); return; }
+            updateDashboardStats();
+        }
+
+        /* ══════════════════════════════════════════
+           TOASTS
+        ══════════════════════════════════════════ */
+        function toast(msg, type) {
+            var el = document.createElement("div");
+            el.className = "toast" + (type ? " " + type : "");
+            el.textContent = msg;
+            document.getElementById("toastStack").appendChild(el);
+            setTimeout(function () { el.remove(); }, 3400);
+        }
+
+        /* ══════════════════════════════════════════
+           HELPERS
+        ══════════════════════════════════════════ */
+        function setText(id, val) {
+            var el = document.getElementById(id);
+            if (el) el.textContent = val;
+        }
+
+        /* ══════════════════════════════════════════
+           BOOTSTRAP
+        ══════════════════════════════════════════ */
+        async function bootstrap() {
+            await loadSuppliers();
+            await loadInvoices();
+            await loadReports();
+            await loadAlerts();
+            updateDashboardStats();
+        }
+    </script>
+</body>
+
+</html>
