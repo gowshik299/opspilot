@@ -187,6 +187,16 @@ def gmail_setup(req: GmailSetupRequest):
 
 # ── Admin ─────────────────────────────────────
 
+@app.get("/rebuild-index")
+async def rebuild_index_route():
+    try:
+        from rag import rebuild_index
+        rebuild_index()
+        return {"status": "Index rebuilt successfully"}
+    except Exception as e:
+        return {"error": str(e)}
+
+
 @app.post("/rag/rebuild")
 def rag_rebuild():
     try:
