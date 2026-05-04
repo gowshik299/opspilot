@@ -183,3 +183,25 @@ def gmail_setup(req: GmailSetupRequest):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Admin ─────────────────────────────────────
+
+@app.post("/rag/rebuild")
+def rag_rebuild():
+    try:
+        from rag import rebuild_index
+        rebuild_index()
+        return {"status": "RAG index rebuilt successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/cache/invalidate")
+def cache_invalidate():
+    try:
+        from retrieval import invalidate_cache
+        invalidate_cache()
+        return {"status": "Excel cache cleared"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

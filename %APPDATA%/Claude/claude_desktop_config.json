@@ -1,0 +1,11 @@
+{
+    "mcpServers": {
+        "procurement": {
+            "command": "cmd",
+            "args": [
+                "/c",
+                "C:\\Users\\gowshik.t\\proc-agent\\run_mcp.bat"
+            ]
+        }
+    }
+}

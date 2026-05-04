@@ -1,5 +1,5 @@
 # rag.py
-# RAG V7 — BM25 + TF-IDF Hybrid | MMR | Section-aware chunking
+# RAG V8 — Voyage AI Semantic + BM25 Hybrid
 
 import os
 import re
@@ -8,17 +8,20 @@ import pickle
 import logging
 from collections import defaultdict
 
+import voyageai
 import pdfplumber
 from dotenv import load_dotenv
 from groq import Groq
-from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+import numpy as np
 
-from config import DATA_DIR, RAG_STORE, PDF_FILES
+from config import DOCUMENTS_DIR, RAG_STORE, PDF_FILES
 
 load_dotenv()
 logger = logging.getLogger(__name__)
-client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+
+groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+voyage_client = voyageai.Client(api_key=os.getenv("VOYAGE_API_KEY"))
 
 SYNONYMS = {
     "ppe":         ["personal protective equipment", "helmet", "gloves", "goggles", "vest"],
@@ -32,6 +35,14 @@ SYNONYMS = {
 }
 
 HEADING_RE = re.compile(r"^(?:\d+[\.\d]*\s+[A-Z]|[A-Z][A-Z\s]{4,}$)", re.MULTILINE)
+TOPIC_BOOSTS = {
+    "safety": ["safety_manual.pdf"],
+    "ppe": ["safety_manual.pdf"],
+    "outage": ["outage_procedures.pdf"],
+    "shutdown": ["outage_procedures.pdf"],
+    "maintenance": ["equipment_maintenance.pdf"],
+    "transformer": ["equipment_maintenance.pdf"],
+}
 
 
 # ── PDF reader ────────────────────────────────
@@ -53,9 +64,10 @@ def read_pdf(path: str) -> list:
 
 def section_chunks(text: str, source: str, page: int, max_words=160, overlap=30) -> list:
     chunks = []
-    splits  = HEADING_RE.split(text)
+    splits = HEADING_RE.split(text)
     headings = HEADING_RE.findall(text)
-    sections = [(headings[i].strip() if i < len(headings) else "", p.strip()) for i, p in enumerate(splits[1:])] or [("", text.strip())]
+    sections = [(headings[i].strip() if i < len(headings) else "", p.strip())
+                for i, p in enumerate(splits[1:])] or [("", text.strip())]
 
     for heading, body in sections:
         words = body.split()
@@ -100,13 +112,14 @@ class BM25:
         return [self.score(query, i) for i in range(self.N)]
 
 
-# ── Index ─────────────────────────────────────
+# ── Build index ───────────────────────────────
 
 def build_index():
-    logger.info("Building RAG index…")
+    logger.info("Building RAG index with Voyage AI embeddings...")
     all_chunks = []
+
     for fname in PDF_FILES:
-        path = os.path.join(DATA_DIR, fname)
+        path = os.path.join(DOCUMENTS_DIR, fname)
         if not os.path.exists(path):
             logger.warning(f"PDF not found: {path}")
             continue
@@ -114,17 +127,30 @@ def build_index():
             all_chunks.extend(section_chunks(page_text, fname, page_num))
 
     if not all_chunks:
-        logger.error("No chunks — check PDFs in data/")
+        logger.error("No chunks found — check PDFs in data/")
         return
 
     texts = [c["text"] for c in all_chunks]
-    vec = TfidfVectorizer(stop_words="english", ngram_range=(1, 2), sublinear_tf=True, max_df=0.85)
-    matrix = vec.fit_transform(texts)
+
+    # BM25
     bm25 = BM25(texts)
 
+    # Voyage AI embeddings in batches of 128
+    print(f"Embedding {len(texts)} chunks with Voyage AI...")
+    embeddings = []
+    batch_size = 128
+    for i in range(0, len(texts), batch_size):
+        batch = texts[i:i + batch_size]
+        result = voyage_client.embed(batch, model="voyage-3-lite")
+        embeddings.extend(result.embeddings)
+        print(f"  Embedded {min(i+batch_size, len(texts))}/{len(texts)} chunks")
+
+    embeddings = np.array(embeddings)
+
     with open(RAG_STORE, "wb") as f:
-        pickle.dump((vec, matrix, bm25, all_chunks), f)
-    logger.info(f"Index built: {len(all_chunks)} chunks")
+        pickle.dump((bm25, embeddings, all_chunks), f)
+
+    print(f"✅ Index built: {len(all_chunks)} chunks")
 
 
 def load_index():
@@ -136,100 +162,131 @@ def load_index():
 
 # ── Retrieval ─────────────────────────────────
 
-TOPIC_BOOSTS = {
-    "safety": ["safety_manual.pdf"], "ppe": ["safety_manual.pdf"],
-    "outage": ["outage_procedures.pdf"], "shutdown": ["outage_procedures.pdf"],
-    "maintenance": ["equipment_maintenance.pdf"], "transformer": ["equipment_maintenance.pdf"],
-}
-
-
 def _norm(scores: list) -> list:
-    mx = max(scores) if scores else 1.0
-    return [s / mx if mx else s for s in scores]
+    arr = np.array(scores)
+    mx = arr.max()
+    return (arr / mx if mx > 0 else arr).tolist()
 
 
 def retrieve_candidates(query: str, top_k: int = 10) -> list:
-    vec, matrix, bm25, meta = load_index()
-    expanded = query + " " + " ".join(t for k, ts in SYNONYMS.items() if k in query.lower() for t in ts)
+    bm25, embeddings, meta = load_index()
 
-    bm25_norm  = _norm(bm25.scores(expanded))
-    tfidf_norm = _norm(cosine_similarity(vec.transform([expanded]), matrix)[0].tolist())
+    # Expand query with synonyms
+    expanded = query + " " + " ".join(
+        t for k, ts in SYNONYMS.items() if k in query.lower() for t in ts
+    )
 
+    # BM25 scores
+    bm25_norm = _norm(bm25.scores(expanded))
+
+    # Voyage AI semantic scores
+    query_emb = np.array(
+        voyage_client.embed([query], model="voyage-3-lite").embeddings[0]
+    )
+    semantic_scores = cosine_similarity([query_emb], embeddings)[0]
+    semantic_norm = _norm(semantic_scores.tolist())
+
+    # Topic boost
     ql = query.lower()
     boosted = {s for k, srcs in TOPIC_BOOSTS.items() if k in ql for s in srcs}
-    qwords  = set(re.findall(r"[a-z0-9]+", ql))
+    qwords = set(re.findall(r"[a-z0-9]+", ql))
 
+    # Hybrid scoring: 40% BM25 + 60% semantic
     scored = []
     for i, chunk in enumerate(meta):
-        h = 0.55 * bm25_norm[i] + 0.45 * tfidf_norm[i]
-        h += len(qwords & set(re.findall(r"[a-z0-9]+", chunk["text"].lower()))) * 0.02
-        if chunk["source"] in boosted: h += 0.15
+        h = 0.40 * bm25_norm[i] + 0.60 * semantic_norm[i]
+        h += len(qwords & set(re.findall(r"[a-z0-9]+", chunk["text"].lower()))) * 0.01
+        if chunk["source"] in boosted:
+            h += 0.10
         scored.append((h, i))
 
     scored.sort(reverse=True)
-    return [dict(**meta[i], score=round(s, 4)) for s, i in scored[:top_k] if s > 0.03]
+    return [dict(**meta[i], score=round(s, 4)) for s, i in scored[:top_k] if s > 0.01]
 
+
+# ── MMR ───────────────────────────────────────
 
 def mmr_select(query: str, chunks: list, k: int = 5, lam: float = 0.6) -> list:
-    if len(chunks) <= k: return chunks
-    vec = TfidfVectorizer(stop_words="english", ngram_range=(1, 2))
-    try:
-        mat = vec.fit_transform([query] + [c["text"] for c in chunks])
-    except Exception:
-        return chunks[:k]
-    rel = cosine_similarity(mat[0], mat[1:])[0]
-    sim = cosine_similarity(mat[1:])
+    if len(chunks) <= k:
+        return chunks
+
+    # Use voyage embeddings for MMR
+    texts = [query] + [c["text"] for c in chunks]
+    result = voyage_client.embed(texts, model="voyage-3-lite")
+    embs = np.array(result.embeddings)
+
+    rel = cosine_similarity([embs[0]], embs[1:])[0]
+    sim = cosine_similarity(embs[1:])
+
     sel, rem = [], list(range(len(chunks)))
     for _ in range(k):
         if not rem: break
         best = (max(rem, key=lambda i: rel[i]) if not sel
                 else max(rem, key=lambda i: lam * rel[i] - (1 - lam) * max(sim[i][j] for j in sel)))
-        sel.append(best); rem.remove(best)
+        sel.append(best)
+        rem.remove(best)
+
     return [chunks[i] for i in sel]
 
 
+# ── Rerank ────────────────────────────────────
+
 def rerank_chunks(query: str, chunks: list) -> list:
-    if len(chunks) <= 3: return chunks
-    listing = "\n".join(f"[{i+1}] {c['source']} p{c.get('page','')}\n{c['text'][:500]}" for i, c in enumerate(chunks))
+    if len(chunks) <= 3:
+        return chunks
     try:
-        res = client.chat.completions.create(
-            model="llama3-8b-8192",
-            messages=[{"role": "user", "content": f"Query: {query}\n\nChunks:\n{listing}\n\nReturn only 3 numbers, comma-separated."}],
-            temperature=0, max_tokens=20,
+        result = voyage_client.rerank(
+            query=query,
+            documents=[c["text"] for c in chunks],
+            model="rerank-2",
+            top_k=3
         )
-        nums = re.findall(r"\d+", res.choices[0].message.content)
-        chosen = [chunks[int(n)-1] for n in nums[:3] if 0 < int(n) <= len(chunks)]
-        return chosen or chunks[:3]
+        return [chunks[r.index] for r in result.results]
     except Exception:
         return chunks[:3]
 
+
+# ── Answer ────────────────────────────────────
 
 def grounded_answer(query: str, chunks: list) -> str:
     context = "\n".join(
         f"[{i+1}] {c['source']} p{c.get('page','')}\n{c['text'][:1200]}"
         for i, c in enumerate(chunks)
     )
-    res = client.chat.completions.create(
-        model="llama3-70b-8192",
-        messages=[{"role": "user", "content": f"""You are OpsPilot AI for a power utility company.
-Answer ONLY from the context below. Use bullets for procedures.
-If not found, say "Not found in the available manuals."
-
-Question: {query}
-
-Context:
-{context}"""}],
-        temperature=0.1,
+    res = groq_client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[
+            {
+                "role": "system",
+                "content": """You are a helpful assistant for a power utility company.
+STRICT RULES:
+- Answer ONLY using the context provided
+- Copy exact values, numbers, specifications from context
+- Never make up information
+- If not in context say "Not found in the available manuals"
+- Be direct and specific"""
+            },
+            {
+                "role": "user",
+                "content": f"Context:\n{context}\n\nQuestion: {query}\n\nAnswer:"
+            }
+        ],
+        temperature=0.0,
+        max_tokens=512
     )
     return res.choices[0].message.content
 
+
+# ── Main ──────────────────────────────────────
 
 def search_documents(query: str) -> str:
     try:
         candidates = retrieve_candidates(query, top_k=10)
         if not candidates:
             return "No relevant information found in the manuals."
-        return grounded_answer(query, rerank_chunks(query, mmr_select(query, candidates, k=6)))
+        selected = mmr_select(query, candidates, k=6)
+        reranked = rerank_chunks(query, selected)
+        return grounded_answer(query, reranked)
     except Exception as e:
         logger.error(f"RAG error: {e}")
         return f"Search error: {e}"

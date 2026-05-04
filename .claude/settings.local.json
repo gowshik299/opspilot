@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(cd \"C:\\\\Users\\\\gowshik.t\\\\proc-agent\"; $env:PYTHONIOENCODING=\"utf-8\"; & \".\\\\venv\\\\Scripts\\\\python.exe\" \"documents\\\\test_rag.py\" 2>&1)"
+    ]
+  }
+}

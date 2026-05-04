@@ -1,4 +1,4 @@
-# reterival.py
+# retrieval.py
 # HYBRID V3 - Structured + Smart Retrieval (No embeddings)
 
 import pandas as pd
@@ -10,6 +10,11 @@ from config import DB_PATH, EXCEL_FILE
 # Only Excel chunks are cached (static file).
 # SQLite chunks are fetched fresh every call so new invoices always appear.
 EXCEL_CACHE = None
+
+
+def invalidate_cache():
+    global EXCEL_CACHE
+    EXCEL_CACHE = None
 
 
 # ---------------------------------------------------
