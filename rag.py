@@ -152,6 +152,8 @@ def build_index():
 def load_index():
     if not os.path.exists(RAG_STORE):
         build_index()
+    if not os.path.exists(RAG_STORE):
+        return BM25([]), np.empty((0, 384)), []
     with open(RAG_STORE, "rb") as f:
         return pickle.load(f)
 
