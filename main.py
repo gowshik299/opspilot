@@ -2,7 +2,6 @@
 # Single entry point — all routes here
 
 import os
-import sqlite3
 import pandas as pd
 from dotenv import load_dotenv
 
@@ -13,10 +12,10 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from agent import run_agent
-from tools import check_alerts, spend_summary
+from tools import check_alerts
 from gmail import setup_gmail, get_gmail_creds
 from memory import save_invoice, get_invoices, get_spend_summary
-from config import EXCEL_FILE, DB_PATH, UPLOADS_DIR
+from config import EXCEL_FILE, UPLOADS_DIR
 
 load_dotenv()
 

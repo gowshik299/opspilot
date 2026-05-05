@@ -4,7 +4,6 @@ import re
 import json
 import pickle
 import logging
-import numpy as np
 from dotenv import load_dotenv
 from groq import Groq
 from sklearn.metrics.pairwise import cosine_similarity
