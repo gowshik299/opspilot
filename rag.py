@@ -15,7 +15,7 @@ from groq import Groq
 from sklearn.metrics.pairwise import cosine_similarity
 from sentence_transformers import SentenceTransformer
 
-from config import DATA_DIR, RAG_STORE, PDF_FILES
+from config import DOCUMENTS_DIR, RAG_STORE, PDF_FILES
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -122,7 +122,7 @@ def build_index():
     all_chunks = []
 
     for fname in PDF_FILES:
-        path = os.path.join(DATA_DIR, fname)
+        path = os.path.join(DOCUMENTS_DIR, fname)
         if not os.path.exists(path):
             logger.warning(f"PDF not found: {path}")
             continue
