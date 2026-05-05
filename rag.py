@@ -1,5 +1,5 @@
 # rag.py
-# RAG V8 — Voyage AI Semantic + BM25 Hybrid
+# RAG V8 — BM25 + Sentence Transformers Hybrid
 
 import os
 import re
@@ -8,20 +8,23 @@ import pickle
 import logging
 from collections import defaultdict
 
-import voyageai
 import pdfplumber
+import numpy as np
 from dotenv import load_dotenv
 from groq import Groq
 from sklearn.metrics.pairwise import cosine_similarity
-import numpy as np
+from sentence_transformers import SentenceTransformer
 
-from config import DOCUMENTS_DIR, RAG_STORE, PDF_FILES
+from config import DATA_DIR, RAG_STORE, PDF_FILES
 
 load_dotenv()
 logger = logging.getLogger(__name__)
-
 groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
-voyage_client = voyageai.Client(api_key=os.getenv("VOYAGE_API_KEY"))
+
+# Load model once
+print("Loading embedding model...")
+embedder = SentenceTransformer("all-MiniLM-L6-v2")
+print("✅ Embedding model loaded!")
 
 SYNONYMS = {
     "ppe":         ["personal protective equipment", "helmet", "gloves", "goggles", "vest"],
@@ -115,11 +118,11 @@ class BM25:
 # ── Build index ───────────────────────────────
 
 def build_index():
-    logger.info("Building RAG index with Voyage AI embeddings...")
+    logger.info("Building RAG index...")
     all_chunks = []
 
     for fname in PDF_FILES:
-        path = os.path.join(DOCUMENTS_DIR, fname)
+        path = os.path.join(DATA_DIR, fname)
         if not os.path.exists(path):
             logger.warning(f"PDF not found: {path}")
             continue
@@ -127,7 +130,7 @@ def build_index():
             all_chunks.extend(section_chunks(page_text, fname, page_num))
 
     if not all_chunks:
-        logger.error("No chunks found — check PDFs in data/")
+        logger.error("No chunks found")
         return
 
     texts = [c["text"] for c in all_chunks]
@@ -135,16 +138,9 @@ def build_index():
     # BM25
     bm25 = BM25(texts)
 
-    # Voyage AI embeddings in batches of 128
-    print(f"Embedding {len(texts)} chunks with Voyage AI...")
-    embeddings = []
-    batch_size = 128
-    for i in range(0, len(texts), batch_size):
-        batch = texts[i:i + batch_size]
-        result = voyage_client.embed(batch, model="voyage-3-lite")
-        embeddings.extend(result.embeddings)
-        print(f"  Embedded {min(i+batch_size, len(texts))}/{len(texts)} chunks")
-
+    # Sentence Transformers embeddings
+    print(f"Embedding {len(texts)} chunks...")
+    embeddings = embedder.encode(texts, show_progress_bar=True)
     embeddings = np.array(embeddings)
 
     with open(RAG_STORE, "wb") as f:
@@ -171,27 +167,20 @@ def _norm(scores: list) -> list:
 def retrieve_candidates(query: str, top_k: int = 10) -> list:
     bm25, embeddings, meta = load_index()
 
-    # Expand query with synonyms
     expanded = query + " " + " ".join(
         t for k, ts in SYNONYMS.items() if k in query.lower() for t in ts
     )
 
-    # BM25 scores
     bm25_norm = _norm(bm25.scores(expanded))
 
-    # Voyage AI semantic scores
-    query_emb = np.array(
-        voyage_client.embed([query], model="voyage-3-lite").embeddings[0]
-    )
-    semantic_scores = cosine_similarity([query_emb], embeddings)[0]
+    query_emb = embedder.encode([query])
+    semantic_scores = cosine_similarity(query_emb, embeddings)[0]
     semantic_norm = _norm(semantic_scores.tolist())
 
-    # Topic boost
     ql = query.lower()
     boosted = {s for k, srcs in TOPIC_BOOSTS.items() if k in ql for s in srcs}
     qwords = set(re.findall(r"[a-z0-9]+", ql))
 
-    # Hybrid scoring: 40% BM25 + 60% semantic
     scored = []
     for i, chunk in enumerate(meta):
         h = 0.40 * bm25_norm[i] + 0.60 * semantic_norm[i]
@@ -210,10 +199,8 @@ def mmr_select(query: str, chunks: list, k: int = 5, lam: float = 0.6) -> list:
     if len(chunks) <= k:
         return chunks
 
-    # Use voyage embeddings for MMR
     texts = [query] + [c["text"] for c in chunks]
-    result = voyage_client.embed(texts, model="voyage-3-lite")
-    embs = np.array(result.embeddings)
+    embs = embedder.encode(texts)
 
     rel = cosine_similarity([embs[0]], embs[1:])[0]
     sim = cosine_similarity(embs[1:])
@@ -235,13 +222,18 @@ def rerank_chunks(query: str, chunks: list) -> list:
     if len(chunks) <= 3:
         return chunks
     try:
-        result = voyage_client.rerank(
-            query=query,
-            documents=[c["text"] for c in chunks],
-            model="rerank-2",
-            top_k=3
+        res = groq_client.chat.completions.create(
+            model="llama3-8b-8192",
+            messages=[{"role": "user", "content":
+                f"Query: {query}\n\nChunks:\n" +
+                "\n".join(f"[{i+1}] {c['text'][:300]}" for i, c in enumerate(chunks)) +
+                "\n\nReturn only 3 numbers comma-separated."}],
+            temperature=0,
+            max_tokens=20,
         )
-        return [chunks[r.index] for r in result.results]
+        nums = re.findall(r"\d+", res.choices[0].message.content)
+        chosen = [chunks[int(n)-1] for n in nums[:3] if 0 < int(n) <= len(chunks)]
+        return chosen or chunks[:3]
     except Exception:
         return chunks[:3]
 
