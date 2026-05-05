@@ -10,6 +10,7 @@ import voyageai
 from dotenv import load_dotenv
 from groq import Groq
 from sklearn.metrics.pairwise import cosine_similarity
+from langsmith import traceable
 
 from retrieval import retrieve
 from rag import search_documents
@@ -17,26 +18,14 @@ from web_tools import search_web
 from gmail import send_email, scan_inbox
 from memory import save_message, get_history
 
-# LangSmith tracing
-os.environ["LANGCHAIN_TRACING_V2"] = os.getenv("LANGCHAIN_TRACING_V2", "false")
-os.environ["LANGCHAIN_API_KEY"] = os.getenv("LANGSMITH_API_KEY", "")
-os.environ["LANGCHAIN_PROJECT"] = os.getenv("LANGSMITH_PROJECT", "procurement-agent")
 load_dotenv()
+
+# LangSmith tracing — must load .env first so the key is available
+os.environ["LANGCHAIN_TRACING_V2"] = "true"
+os.environ["LANGCHAIN_API_KEY"] = os.getenv("LANGSMITH_API_KEY", "")
+os.environ["LANGCHAIN_PROJECT"] = os.getenv("LANGSMITH_PROJECT", "opspilot")
+
 logger = logging.getLogger(__name__)
-
-from langsmith import traceable
-
-@traceable(name="semantic_router")
-def route_query(query: str) -> str:
-    ...
-
-@traceable(name="llm_answer")  
-def llm_answer(query: str, chunks: list, route: str) -> str:
-    ...
-
-@traceable(name="run_agent")
-async def run_agent(user_name: str, message: str) -> str:
-    ...
 groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 voyage_client = voyageai.Client(api_key=os.getenv("VOYAGE_API_KEY"))
 
@@ -64,6 +53,7 @@ print("✅ Semantic router ready!")
 
 # ── Semantic router ───────────────────────────────────────
 
+@traceable(name="semantic_router")
 def route_query(query: str) -> str:
     result = voyage_client.embed([query], model="voyage-3-lite")
     query_emb = np.array(result.embeddings[0])
@@ -148,6 +138,7 @@ def summarise_web(query: str, results) -> str:
 
 # ── LLM answer ────────────────────────────────────────────
 
+@traceable(name="llm_answer")
 def llm_answer(query: str, chunks: list, route: str) -> str:
     context = "\n".join(
         f"[{i+1}] {c['source']}\n{c['text']}"
@@ -180,6 +171,7 @@ Use bullets for lists, exact numbers for quantities and prices."""
 
 # ── Main agent ────────────────────────────────────────────
 
+@traceable(name="run_agent")
 async def run_agent(user_name: str, message: str) -> str:
     save_message(user_name, "user", message)
     history = get_history(user_name)
