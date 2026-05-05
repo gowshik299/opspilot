@@ -1,14 +1,10 @@
 # retrieval.py
-# HYBRID V3 - Structured + Smart Retrieval (No embeddings)
-
 import pandas as pd
-import sqlite3
 import difflib
 
-from config import DB_PATH, EXCEL_FILE
+from config import EXCEL_FILE
 
-# Only Excel chunks are cached (static file).
-# SQLite chunks are fetched fresh every call so new invoices always appear.
+# Excel is cached per process; invoices are fetched fresh from PostgreSQL each call.
 EXCEL_CACHE = None
 
 
@@ -58,38 +54,25 @@ def build_excel_chunks():
     return chunks
 
 
-def build_sqlite_chunks():
-    chunks = []
-
+def build_invoice_chunks():
     try:
-        conn = sqlite3.connect(DB_PATH)
-        cur = conn.cursor()
-
-        cur.execute("""
-            SELECT vendor_name, amount, filename
-            FROM invoices
-        """)
-
-        rows = cur.fetchall()
-        conn.close()
-
-        for r in rows:
-            text = f"Vendor: {r[0]} | Amount: {r[1]} | File: {r[2]}"
-            chunks.append({
+        from memory import get_invoices
+        return [
+            {
                 "source": "Invoices",
-                "text": text,
-                "columns": ["vendor", "amount", "file"]
-            })
-
+                "text": f"Vendor: {r['vendor_name']} | Amount: {r['amount']} | File: {r['filename']}",
+                "columns": ["vendor", "amount", "file"],
+            }
+            for r in get_invoices()
+        ]
     except Exception as e:
-        print(f"SQLite load error: {e}")
-
-    return chunks
+        print(f"Invoice load error: {e}")
+        return []
 
 
 def get_all_chunks():
-    # Excel is cached, SQLite is always fresh
-    return build_excel_chunks() + build_sqlite_chunks()
+    # Excel is cached, invoices are always fresh from PostgreSQL
+    return build_excel_chunks() + build_invoice_chunks()
 
 
 # ---------------------------------------------------

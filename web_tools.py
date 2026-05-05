@@ -15,7 +15,7 @@ def get_client():
     return _client
 
 
-def search_web(query: str) -> dict | str:
+def search_web(query: str):
     try:
         return get_client().search(query=query, search_depth="advanced", max_results=5)
     except Exception as e:

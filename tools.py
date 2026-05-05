@@ -1,9 +1,6 @@
 # tools.py
-# Structured data tools — reads Excel + SQLite
-
 import pandas as pd
-import sqlite3
-from config import EXCEL_FILE, DB_PATH
+from config import EXCEL_FILE
 
 
 def read_sheet(sheet: str) -> pd.DataFrame:
@@ -108,19 +105,16 @@ def pending_summary() -> str:
         return f"Pending error: {e}"
 
 
-# ── Invoices (SQLite) ─────────────────────────
+# ── Invoices (PostgreSQL via memory.py) ──────────────────────────
 
 def get_invoice_summary() -> str:
     try:
-        conn = sqlite3.connect(DB_PATH)
-        cur = conn.cursor()
-        cur.execute("SELECT COUNT(*) FROM invoices")
-        total = cur.fetchone()[0]
-        cur.execute("SELECT vendor_name, amount FROM invoices ORDER BY id DESC LIMIT 5")
-        rows = cur.fetchall()
-        conn.close()
-        lines = [f"Total Invoices: {total}"]
-        lines += [f"• {r[0]} — ₹{r[1]}" for r in rows]
+        from memory import get_invoices
+        rows = get_invoices()
+        if not rows:
+            return "No invoices found."
+        lines = [f"Total Invoices: {len(rows)}"]
+        lines += [f"• {r['vendor_name']} — ₹{r['amount']}" for r in rows[:5]]
         return "\n".join(lines)
     except Exception as e:
         return f"Invoice error: {e}"
@@ -128,14 +122,12 @@ def get_invoice_summary() -> str:
 
 def highest_invoice() -> str:
     try:
-        conn = sqlite3.connect(DB_PATH)
-        cur = conn.cursor()
-        cur.execute(
-            "SELECT vendor_name, amount FROM invoices ORDER BY CAST(amount AS REAL) DESC LIMIT 1"
-        )
-        row = cur.fetchone()
-        conn.close()
-        return f"• {row[0]} — ₹{row[1]}" if row else "No invoices found."
+        from memory import get_invoices
+        rows = get_invoices()
+        if not rows:
+            return "No invoices found."
+        top = max(rows, key=lambda r: float(r.get("amount") or 0))
+        return f"• {top['vendor_name']} — ₹{top['amount']}"
     except Exception as e:
         return f"Highest invoice error: {e}"
 

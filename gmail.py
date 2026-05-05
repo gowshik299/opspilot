@@ -52,13 +52,13 @@ def send_email(to_email: str, to_name: str, subject: str, body: str) -> str:
         server.sendmail(gmail, to_email, msg.as_string())
         server.quit()
 
-        conn = get_db()
-        conn.execute(
-            "INSERT INTO email_log (supplier_name, supplier_email, item_name, status) VALUES (?, ?, ?, ?)",
-            (to_name, to_email, subject, "sent"),
-        )
-        conn.commit()
-        conn.close()
+        from sqlalchemy import text
+        with get_db() as conn:
+            conn.execute(
+                text("INSERT INTO email_log (supplier_name, supplier_email, item_name, status) VALUES (:a, :b, :c, :d)"),
+                {"a": to_name, "b": to_email, "c": subject, "d": "sent"},
+            )
+            conn.commit()
 
         return f"✅ Email sent to {to_name}"
     except Exception as e:
