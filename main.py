@@ -269,5 +269,6 @@ def cache_invalidate():
 
 
 # ── Mount MCP ─────────────────────────────────
-mcp_app = mcp.http_app(path="/")
-app.mount("/mcp", mcp_app)
+from fastmcp.server.http import create_starlette_app
+mcp_starlette = create_starlette_app(mcp._mcp_server, debug=False)
+app.mount("/mcp", mcp_starlette)
