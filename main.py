@@ -278,6 +278,4 @@ def mcp_version():
 
 
 # ── Mount MCP ─────────────────────────────────
-from fastmcp.server.http import create_starlette_app
-mcp_starlette = create_starlette_app(mcp._mcp_server, debug=False)
-app.mount("/mcp", mcp_starlette)
+app.mount("/mcp", mcp.get_asgi_app())
