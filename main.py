@@ -15,6 +15,8 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from fastmcp import FastMCP
+
 from agent import run_agent
 from tools import check_alerts
 from gmail import setup_gmail, get_gmail_creds
@@ -22,6 +24,63 @@ from memory import save_invoice, get_invoices, get_spend_summary
 from config import EXCEL_FILE, UPLOADS_DIR
 
 app = FastAPI(title="OpsPilot", version="2.0")
+
+# ── MCP server (mounted at /mcp) ──────────────────────
+mcp = FastMCP("opspilot")
+
+@mcp.tool()
+def suppliers() -> str:
+    """Get approved suppliers list"""
+    from tools import get_suppliers as fn
+    return fn()
+
+@mcp.tool()
+def best_suppliers() -> str:
+    """Get top suppliers by order count"""
+    from tools import top_suppliers as fn
+    return fn()
+
+@mcp.tool()
+def suppliers_in_city(city: str) -> str:
+    """Get suppliers in a specific city"""
+    from tools import suppliers_by_city as fn
+    return fn(city)
+
+@mcp.tool()
+def procurement_history() -> str:
+    """Get recent procurement history"""
+    from tools import get_procurement_history as fn
+    return fn()
+
+@mcp.tool()
+def spending_summary() -> str:
+    """Get total spend breakdown by category"""
+    from tools import spend_summary as fn
+    return fn()
+
+@mcp.tool()
+def mcp_alerts() -> str:
+    """Get high priority alerts"""
+    from tools import check_alerts as fn
+    return fn()
+
+@mcp.tool()
+def pending() -> str:
+    """Get pending requirements"""
+    from tools import pending_summary as fn
+    return fn()
+
+@mcp.tool()
+def invoices() -> str:
+    """Get invoice summary"""
+    from tools import get_invoice_summary as fn
+    return fn()
+
+@mcp.tool()
+def search_manuals(query: str) -> str:
+    """Search safety manual and equipment guides"""
+    from rag import search_documents as fn
+    return fn(query)
 
 app.add_middleware(
     CORSMiddleware,
@@ -216,3 +275,7 @@ def cache_invalidate():
         return {"status": "Excel cache cleared"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ── Mount MCP ─────────────────────────────────────────
+app.mount("/mcp", mcp.get_asgi_app())
