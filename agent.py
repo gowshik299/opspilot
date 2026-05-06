@@ -133,7 +133,7 @@ def summarise_web(query: str, results) -> str:
             temperature=0.0,
             max_tokens=200,
         )
-        return res.choices[0].message.content
+        return _strip_urls(res.choices[0].message.content)
     except Exception as e:
         return f"Web search error: {e}"
 
