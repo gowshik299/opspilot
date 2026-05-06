@@ -278,4 +278,13 @@ def mcp_version():
 
 
 # ── Mount MCP ─────────────────────────────────
-app.mount("/mcp", mcp.get_asgi_app())
+try:
+    mcp_app = mcp.get_asgi_app()
+    app.mount("/mcp", mcp_app)
+    print("✅ MCP endpoint mounted at /mcp")
+except Exception as e:
+    print(f"⚠️ MCP mount failed: {e}")
+
+    @app.get("/mcp")
+    def mcp_fallback():
+        return {"error": "MCP not available", "reason": str(e)}
