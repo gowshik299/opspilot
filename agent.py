@@ -97,6 +97,47 @@ Context: {context}"""}],
         return {}
 
 
+# ── Web search summariser ─────────────────────────────────────────────────────
+
+def summarise_web(query: str, results) -> str:
+    if isinstance(results, str):
+        return results
+
+    snippets = "\n".join(
+        f"Source: {r.get('url', '')}\nContent: {r.get('content', '')[:600]}"
+        for r in results.get("results", [])[:4]
+    )
+
+    if not snippets:
+        return "No web results found."
+
+    try:
+        res = groq_client.chat.completions.create(
+            model=MODEL,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a procurement assistant for a power utility company in India.\n"
+                        "Summarise web search results clearly and concisely.\n"
+                        "Focus on: prices in INR, suppliers, market trends.\n"
+                        "Format: 2-3 bullet points maximum.\n"
+                        "Never show raw URLs in your answer."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": f"Query: {query}\n\nSearch Results:\n{snippets}\n\nProvide a clean summary:",
+                },
+            ],
+            temperature=0.1,
+            max_tokens=300,
+        )
+        return res.choices[0].message.content
+    except Exception as e:
+        return f"Web search error: {e}"
+
+
 # ── LLM answer over retrieval chunks ─────────────────────────────────────────
 
 def llm_answer(query: str, chunks: list) -> str:
@@ -135,6 +176,11 @@ async def run_agent(user_name: str, message: str) -> str:
     # Direct single-function tools (no extra logic needed)
     if direct_fn is not None:
         result = direct_fn(search_query) if route in QUERY_TOOLS else direct_fn()
+
+    # Web search: fetch then summarise with LLM
+    elif route == "web_search":
+        from web_tools import search_web
+        result = summarise_web(search_query, search_web(search_query))
 
     # Procurement: retrieve from Excel/DB then answer with LLM
     elif route in ("procurement", "general"):

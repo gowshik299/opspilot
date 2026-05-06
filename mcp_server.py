@@ -130,7 +130,7 @@ def scan_inbox() -> str:
 
 TOOL_REGISTRY: dict = {
     "search_documents": (
-        "safety procedures PPE protective equipment high voltage transformer maintenance outage procedures equipment manual technical specifications",
+        "safety procedures PPE protective equipment high voltage transformer maintenance outage procedures equipment manual technical specifications insulation voltage lineman work permit lockout",
         search_documents,
     ),
     "suppliers": (
@@ -138,19 +138,19 @@ TOOL_REGISTRY: dict = {
         get_suppliers,
     ),
     "procurement": (
-        "pending requirements purchase history spending budget invoices orders vendor comparison top spend summary",
+        "pending requirements suppliers purchase history spending budget invoices procurement orders vendor comparison priority open status items needed buy order",
         None,  # agent dispatches to retrieval + LLM
     ),
     "alerts": (
-        "alerts warnings overdue urgent high priority deadlines due soon",
+        "alerts warnings overdue urgent high priority deadlines due soon critical",
         check_alerts,
     ),
     "web_search": (
-        "current market price latest news search online real time information today live",
-        web_search,
+        "current market price latest news search online real time information today cost per unit INR rupees",
+        None,  # agent calls search_web then summarise_web
     ),
     "email_supplier": (
-        "send email contact supplier notify vendor price quote request draft",
+        "send email contact supplier notify vendor email price quote request write mail",
         None,  # agent parses intent first
     ),
     "scan_email": (
@@ -164,7 +164,7 @@ TOOL_REGISTRY: dict = {
 }
 
 # Tools in this set receive (query_string) as their sole argument.
-QUERY_TOOLS = {"search_documents", "web_search"}
+QUERY_TOOLS = {"search_documents"}
 
 
 if __name__ == "__main__":
