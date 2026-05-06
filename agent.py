@@ -99,12 +99,18 @@ Context: {context}"""}],
 
 # ── Web search summariser ─────────────────────────────────────────────────────
 
+def _strip_urls(text: str) -> str:
+    text = re.sub(r'https?://\S+', '', text)
+    text = re.sub(r'www\.\S+', '', text)
+    return re.sub(r'\s+', ' ', text).strip()
+
+
 def summarise_web(query: str, results) -> str:
     if isinstance(results, str):
         return results
 
     snippets = "\n".join(
-        f"{r.get('content', '')[:400]}"
+        _strip_urls(r.get('content', '')[:500])
         for r in results.get("results", [])[:3]
     )
 
