@@ -268,6 +268,15 @@ def cache_invalidate():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/mcp-version")
+def mcp_version():
+    import fastmcp
+    return {
+        "version": fastmcp.__version__,
+        "methods": [m for m in dir(fastmcp.FastMCP) if not m.startswith("_")]
+    }
+
+
 # ── Mount MCP ─────────────────────────────────
 from fastmcp.server.http import create_starlette_app
 mcp_starlette = create_starlette_app(mcp._mcp_server, debug=False)
