@@ -1,6 +1,6 @@
 # mcp_server.py — Production HTTP MCP Server
 import os
-from fastmcp import FastMCP
+from mcp.server.fastmcp import FastMCP
 from tools import (
     get_suppliers, top_suppliers, suppliers_by_city,
     get_procurement_history, spend_summary, highest_purchase,

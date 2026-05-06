@@ -15,7 +15,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from fastmcp import FastMCP
+from mcp.server.fastmcp import FastMCP
 
 from agent import run_agent
 from tools import check_alerts
