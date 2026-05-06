@@ -14,8 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-
-from mcp.server.fastmcp import FastMCP
+from fastmcp import FastMCP
 
 from agent import run_agent
 from tools import check_alerts
@@ -25,7 +24,17 @@ from config import EXCEL_FILE, UPLOADS_DIR
 
 app = FastAPI(title="OpsPilot", version="2.0")
 
-# ── MCP server (mounted at /mcp) ──────────────────────
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# ── MCP server ────────────────────────────────
 mcp = FastMCP("opspilot")
 
 @mcp.tool()
@@ -81,16 +90,6 @@ def search_manuals(query: str) -> str:
     """Search safety manual and equipment guides"""
     from rag import search_documents as fn
     return fn(query)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
 # ── Request models ────────────────────────────
@@ -165,9 +164,8 @@ async def upload_invoice(file: UploadFile = File(...)):
         with open(path, "wb") as f:
             f.write(content)
 
-        # Try PDF text extraction for vendor/amount
         vendor_name = file.filename.rsplit(".", 1)[0]
-        amount      = 0.0
+        amount = 0.0
 
         try:
             import pdfplumber, re
@@ -183,7 +181,6 @@ async def upload_invoice(file: UploadFile = File(...)):
             pass
 
         save_invoice(file.filename, vendor_name, amount)
-
         return {"message": "Uploaded", "parsed": {"vendor_name": vendor_name, "amount": amount}}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -195,8 +192,6 @@ async def upload_invoice(file: UploadFile = File(...)):
 def get_reports():
     try:
         data = get_spend_summary()
-
-        # Category breakdown from Excel
         try:
             df = pd.read_excel(EXCEL_FILE, sheet_name="Procurement_History")
             by_cat = (
@@ -206,7 +201,6 @@ def get_reports():
             breakdown = "\n".join(f"• {cat}: ₹{int(val):,}" for cat, val in by_cat.items())
         except Exception:
             breakdown = "No procurement history available."
-
         data["category_breakdown"] = breakdown
         return data
     except Exception as e:
@@ -219,7 +213,6 @@ def get_reports():
 def get_alerts():
     try:
         raw = check_alerts()
-        # check_alerts returns a string — convert to list of dicts for the frontend
         if isinstance(raw, str):
             lines = [l.strip("• ").strip() for l in raw.strip().splitlines() if l.strip()]
             alerts = [{"level": "High", "message": l} for l in lines]
@@ -238,7 +231,7 @@ def gmail_setup(req: GmailSetupRequest):
         ok = setup_gmail(req.gmail, req.app_password)
         if ok:
             return {"status": "connected", "gmail": req.gmail}
-        raise HTTPException(status_code=400, detail="Gmail connection failed. Check credentials.")
+        raise HTTPException(status_code=400, detail="Gmail connection failed.")
     except HTTPException:
         raise
     except Exception as e:
@@ -256,7 +249,6 @@ async def rebuild_index_route():
     except Exception as e:
         return {"error": str(e)}
 
-
 @app.post("/rag/rebuild")
 def rag_rebuild():
     try:
@@ -265,7 +257,6 @@ def rag_rebuild():
         return {"status": "RAG index rebuilt successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @app.post("/cache/invalidate")
 def cache_invalidate():
@@ -277,5 +268,6 @@ def cache_invalidate():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ── Mount MCP ─────────────────────────────────────────
-app.mount("/mcp", mcp.get_asgi_app())
+# ── Mount MCP ─────────────────────────────────
+mcp_app = mcp.http_app(path="/")
+app.mount("/mcp", mcp_app)
