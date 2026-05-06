@@ -104,8 +104,8 @@ def summarise_web(query: str, results) -> str:
         return results
 
     snippets = "\n".join(
-        f"Source: {r.get('url', '')}\nContent: {r.get('content', '')[:600]}"
-        for r in results.get("results", [])[:4]
+        f"{r.get('content', '')[:400]}"
+        for r in results.get("results", [])[:3]
     )
 
     if not snippets:
@@ -117,21 +117,15 @@ def summarise_web(query: str, results) -> str:
             messages=[
                 {
                     "role": "system",
-                    "content": (
-                        "You are a procurement assistant for a power utility company in India.\n"
-                        "Summarise web search results clearly and concisely.\n"
-                        "Focus on: prices in INR, suppliers, market trends.\n"
-                        "Format: 2-3 bullet points maximum.\n"
-                        "Never show raw URLs in your answer."
-                    ),
+                    "content": "Summarise in 3 bullet points. Only facts and prices. No URLs. No markdown links. Plain text only.",
                 },
                 {
                     "role": "user",
-                    "content": f"Query: {query}\n\nSearch Results:\n{snippets}\n\nProvide a clean summary:",
+                    "content": f"Query: {query}\n\nData:\n{snippets}\n\nSummary:",
                 },
             ],
-            temperature=0.1,
-            max_tokens=300,
+            temperature=0.0,
+            max_tokens=200,
         )
         return res.choices[0].message.content
     except Exception as e:
