@@ -1,9 +1,13 @@
 # main.py
-# Single entry point — all routes here
-
 import os
-import pandas as pd
 from dotenv import load_dotenv
+load_dotenv()
+
+os.environ["LANGCHAIN_TRACING_V2"] = os.getenv("LANGCHAIN_TRACING_V2", "false")
+os.environ["LANGCHAIN_API_KEY"] = os.getenv("LANGCHAIN_API_KEY", "")
+os.environ["LANGCHAIN_PROJECT"] = os.getenv("LANGCHAIN_PROJECT", "procurement-agent")
+
+import pandas as pd
 
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,8 +20,6 @@ from tools import check_alerts
 from gmail import setup_gmail, get_gmail_creds
 from memory import save_invoice, get_invoices, get_spend_summary
 from config import EXCEL_FILE, UPLOADS_DIR
-
-load_dotenv()
 
 app = FastAPI(title="OpsPilot", version="2.0")
 
