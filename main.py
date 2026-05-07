@@ -1,11 +1,12 @@
 # main.py
 import os
+from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 load_dotenv()
 
 os.environ["LANGCHAIN_TRACING_V2"] = os.getenv("LANGCHAIN_TRACING_V2", "false")
-os.environ["LANGCHAIN_API_KEY"] = os.getenv("LANGCHAIN_API_KEY", "")
-os.environ["LANGCHAIN_PROJECT"] = os.getenv("LANGCHAIN_PROJECT", "procurement-agent")
+os.environ["LANGCHAIN_API_KEY"]     = os.getenv("LANGCHAIN_API_KEY", "")
+os.environ["LANGCHAIN_PROJECT"]     = os.getenv("LANGCHAIN_PROJECT", "procurement-agent")
 
 import pandas as pd
 
@@ -22,19 +23,9 @@ from gmail import setup_gmail, get_gmail_creds
 from memory import save_invoice, get_invoices, get_spend_summary
 from config import EXCEL_FILE, UPLOADS_DIR
 
-app = FastAPI(title="OpsPilot", version="2.0")
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# ── MCP server (defined before app) ──────────────────────────────────────────
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
-
-# ── MCP server ────────────────────────────────
 mcp = FastMCP("opspilot")
 
 @mcp.tool()
@@ -92,7 +83,32 @@ def search_manuals(query: str) -> str:
     return fn(query)
 
 
-# ── Request models ────────────────────────────
+# ── Lifespan (MCP + FastAPI) ──────────────────────────────────────────────────
+
+mcp_app = mcp.http_app(path="/")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    async with mcp_app.router.lifespan_context(app):
+        yield
+
+
+# ── FastAPI app ───────────────────────────────────────────────────────────────
+
+app = FastAPI(title="OpsPilot", version="2.0", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+
+# ── Request models ────────────────────────────────────────────────────────────
 
 class ChatRequest(BaseModel):
     user_name: str
@@ -103,7 +119,7 @@ class GmailSetupRequest(BaseModel):
     app_password: str
 
 
-# ── Pages ─────────────────────────────────────
+# ── Pages ─────────────────────────────────────────────────────────────────────
 
 @app.get("/", response_class=HTMLResponse)
 async def serve_ui():
@@ -111,7 +127,7 @@ async def serve_ui():
         return f.read()
 
 
-# ── Health ────────────────────────────────────
+# ── Health ────────────────────────────────────────────────────────────────────
 
 @app.get("/health")
 async def health():
@@ -123,7 +139,7 @@ async def health():
     }
 
 
-# ── Chat ──────────────────────────────────────
+# ── Chat ──────────────────────────────────────────────────────────────────────
 
 @app.post("/chat")
 async def chat(req: ChatRequest):
@@ -134,7 +150,7 @@ async def chat(req: ChatRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ── Suppliers ─────────────────────────────────
+# ── Suppliers ─────────────────────────────────────────────────────────────────
 
 @app.get("/suppliers")
 def get_suppliers():
@@ -145,7 +161,7 @@ def get_suppliers():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ── Invoices ──────────────────────────────────
+# ── Invoices ──────────────────────────────────────────────────────────────────
 
 @app.get("/invoices")
 def list_invoices():
@@ -165,7 +181,7 @@ async def upload_invoice(file: UploadFile = File(...)):
             f.write(content)
 
         vendor_name = file.filename.rsplit(".", 1)[0]
-        amount = 0.0
+        amount      = 0.0
 
         try:
             import pdfplumber, re
@@ -186,7 +202,7 @@ async def upload_invoice(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ── Reports ───────────────────────────────────
+# ── Reports ───────────────────────────────────────────────────────────────────
 
 @app.get("/reports")
 def get_reports():
@@ -207,7 +223,7 @@ def get_reports():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ── Alerts ────────────────────────────────────
+# ── Alerts ────────────────────────────────────────────────────────────────────
 
 @app.get("/alerts")
 def get_alerts():
@@ -223,7 +239,7 @@ def get_alerts():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ── Gmail ─────────────────────────────────────
+# ── Gmail ─────────────────────────────────────────────────────────────────────
 
 @app.post("/gmail-setup")
 def gmail_setup(req: GmailSetupRequest):
@@ -238,7 +254,7 @@ def gmail_setup(req: GmailSetupRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-# ── Admin ─────────────────────────────────────
+# ── Admin ─────────────────────────────────────────────────────────────────────
 
 @app.get("/rebuild-index")
 async def rebuild_index_route():
@@ -268,6 +284,8 @@ def cache_invalidate():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ── Debug ─────────────────────────────────────────────────────────────────────
+
 @app.get("/mcp-test")
 async def mcp_test():
     try:
@@ -275,7 +293,6 @@ async def mcp_test():
         return {"status": "MCP app created successfully", "type": str(type(test_app))}
     except Exception as e:
         return {"error": str(e)}
-
 
 @app.get("/mcp-version")
 def mcp_version():
@@ -286,10 +303,6 @@ def mcp_version():
     }
 
 
-# ── Mount MCP ─────────────────────────────────
-try:
-    mcp_app = mcp.http_app(path="/")
-    app.mount("/mcp", mcp_app)
-    print("✅ MCP endpoint mounted at /mcp")
-except Exception as e:
-    print(f"⚠️ MCP mount failed: {e}")
+# ── Mount MCP ─────────────────────────────────────────────────────────────────
+
+app.mount("/mcp", mcp_app)
