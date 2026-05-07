@@ -6,7 +6,6 @@ from fastapi import FastAPI
 
 mcp = FastMCP("opspilot-procurement")
 
-
 @mcp.tool()
 def get_suppliers() -> str:
     """Get approved suppliers list with ratings and contact details"""
@@ -62,15 +61,13 @@ def search_manuals(query: str) -> str:
     return fn(query)
 
 @mcp.tool()
-def search_web(query: str) -> str:
+def web_search(query: str) -> str:
     """Search web for current market prices and supplier information"""
     from web_tools import search_web as fn
     import asyncio
     return asyncio.run(fn(query))
 
-
-# ── FastAPI with MCP lifespan ─────────────────────────────────────────────────
-
+# FastAPI with MCP lifespan
 mcp_app = mcp.http_app(path="/")
 
 @asynccontextmanager
@@ -84,48 +81,6 @@ app.mount("/mcp", mcp_app)
 @app.get("/health")
 def health():
     return {"status": "running", "service": "opspilot-mcp"}
-
-
-# ── TOOL_REGISTRY ─────────────────────────────────────────────────────────────
-# Used by agent.py for semantic routing.
-
-TOOL_REGISTRY: dict = {
-    "search_documents": (
-        "safety procedures PPE protective equipment high voltage transformer maintenance outage procedures equipment manual technical specifications insulation voltage lineman work permit lockout",
-        search_manuals,
-    ),
-    "suppliers": (
-        "show list suppliers vendor approved supplier contact details name city category",
-        get_suppliers,
-    ),
-    "procurement": (
-        "pending requirements suppliers purchase history spending budget invoices procurement orders vendor comparison priority open status items needed buy order",
-        None,
-    ),
-    "alerts": (
-        "alerts warnings overdue urgent high priority deadlines due soon critical",
-        check_alerts,
-    ),
-    "web_search": (
-        "current market price latest news search online real time information today cost per unit INR rupees",
-        None,
-    ),
-    "email_supplier": (
-        "send email contact supplier notify vendor email price quote request write mail",
-        None,
-    ),
-    "scan_email": (
-        "check inbox new emails supplier replies any updates messages received",
-        None,
-    ),
-    "general": (
-        "general question answer help information",
-        None,
-    ),
-}
-
-QUERY_TOOLS = {"search_documents", "search_web"}
-
 
 if __name__ == "__main__":
     import uvicorn
