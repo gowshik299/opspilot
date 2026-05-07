@@ -268,6 +268,15 @@ def cache_invalidate():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/mcp-test")
+async def mcp_test():
+    try:
+        test_app = mcp.http_app(path="/")
+        return {"status": "MCP app created successfully", "type": str(type(test_app))}
+    except Exception as e:
+        return {"error": str(e)}
+
+
 @app.get("/mcp-version")
 def mcp_version():
     import fastmcp
