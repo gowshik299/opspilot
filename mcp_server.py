@@ -1,118 +1,93 @@
-# mcp_server.py — Production HTTP MCP Server
+# mcp_server.py - Standalone MCP Server
 import os
-from mcp.server.fastmcp import FastMCP
-from tools import (
-    get_suppliers, top_suppliers, suppliers_by_city,
-    get_procurement_history, spend_summary, highest_purchase,
-    check_alerts, pending_summary, get_invoice_summary, highest_invoice,
-)
-from rag import search_documents
-from gmail import send_email, scan_inbox as _scan_inbox
-from web_tools import search_web
+from fastmcp import FastMCP
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
 
 mcp = FastMCP("opspilot-procurement")
 
 
-# ── Suppliers ────────────────────────────────────────────────────────────────
-
 @mcp.tool()
-def suppliers(category: str = "All") -> str:
-    """Get approved suppliers list filtered by category."""
-    return get_suppliers()
+def get_suppliers() -> str:
+    """Get approved suppliers list with ratings and contact details"""
+    from tools import get_suppliers as fn
+    return fn()
 
 @mcp.tool()
 def best_suppliers() -> str:
-    """Get top suppliers by order count."""
-    return top_suppliers()
+    """Get top suppliers ranked by order count and performance"""
+    from tools import top_suppliers as fn
+    return fn()
 
 @mcp.tool()
 def suppliers_in_city(city: str) -> str:
-    """Get suppliers in a specific city."""
-    return suppliers_by_city(city)
-
-
-# ── Procurement ──────────────────────────────────────────────────────────────
+    """Get suppliers in a specific city"""
+    from tools import suppliers_by_city as fn
+    return fn(city)
 
 @mcp.tool()
 def procurement_history() -> str:
-    """Get recent procurement history with prices."""
-    return get_procurement_history()
+    """Get recent procurement history with prices and vendors"""
+    from tools import get_procurement_history as fn
+    return fn()
 
 @mcp.tool()
 def spending_summary() -> str:
-    """Get total spend breakdown by category."""
-    return spend_summary()
+    """Get total spend breakdown by category"""
+    from tools import spend_summary as fn
+    return fn()
 
 @mcp.tool()
-def highest_spend() -> str:
-    """Get the single largest purchase on record."""
-    return highest_purchase()
-
-
-# ── Alerts / Pending ─────────────────────────────────────────────────────────
+def check_alerts() -> str:
+    """Get high priority pending requirement alerts"""
+    from tools import check_alerts as fn
+    return fn()
 
 @mcp.tool()
-def alerts() -> str:
-    """Get high priority pending requirement alerts."""
-    return check_alerts()
+def pending_requirements() -> str:
+    """Get all pending procurement requirements"""
+    from tools import pending_summary as fn
+    return fn()
 
 @mcp.tool()
-def pending() -> str:
-    """Get pending requirements summary."""
-    return pending_summary()
-
-
-# ── Invoices ─────────────────────────────────────────────────────────────────
-
-@mcp.tool()
-def invoices() -> str:
-    """Get invoice summary."""
-    return get_invoice_summary()
-
-@mcp.tool()
-def top_invoice() -> str:
-    """Get highest value invoice."""
-    return highest_invoice()
-
-
-# ── Documents / RAG ──────────────────────────────────────────────────────────
+def invoice_summary() -> str:
+    """Get invoice summary and payment status"""
+    from tools import get_invoice_summary as fn
+    return fn()
 
 @mcp.tool()
 def search_manuals(query: str) -> str:
-    """Search safety manual, outage procedures and equipment maintenance guides."""
-    return search_documents(query)
-
-
-# ── Web ───────────────────────────────────────────────────────────────────────
+    """Search safety manuals, outage procedures and equipment maintenance guides"""
+    from rag import search_documents as fn
+    return fn(query)
 
 @mcp.tool()
-def web_search(query: str) -> str:
-    """Search the web for live prices, news, or current information."""
-    result = search_web(query)
-    if isinstance(result, str):
-        return result
-    return "\n".join(
-        r.get("content", "")[:400]
-        for r in result.get("results", [])[:3]
-    )
+def search_web(query: str) -> str:
+    """Search web for current market prices and supplier information"""
+    from web_tools import search_web as fn
+    import asyncio
+    return asyncio.run(fn(query))
 
 
-# ── Email ─────────────────────────────────────────────────────────────────────
+# ── FastAPI with MCP lifespan ─────────────────────────────────────────────────
 
-@mcp.tool()
-def send_supplier_email(to_email: str, to_name: str, subject: str, body: str) -> str:
-    """Send an email to a supplier."""
-    return send_email(to_email, to_name, subject, body)
+mcp_app = mcp.http_app(path="/")
 
-@mcp.tool()
-def scan_inbox() -> str:
-    """Check Gmail inbox for recent supplier replies."""
-    return _scan_inbox(last_n=10)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    async with mcp_app.router.lifespan_context(app):
+        yield
+
+app = FastAPI(title="OpsPilot MCP Server", lifespan=lifespan)
+app.mount("/mcp", mcp_app)
+
+@app.get("/health")
+def health():
+    return {"status": "running", "service": "opspilot-mcp"}
 
 
 # ── TOOL_REGISTRY ─────────────────────────────────────────────────────────────
 # Used by agent.py for semantic routing.
-# Each entry: route_key → (routing_description, callable_or_None)
 
 TOOL_REGISTRY: dict = {
     "search_documents": (
@@ -121,7 +96,7 @@ TOOL_REGISTRY: dict = {
     ),
     "suppliers": (
         "show list suppliers vendor approved supplier contact details name city category",
-        suppliers,
+        get_suppliers,
     ),
     "procurement": (
         "pending requirements suppliers purchase history spending budget invoices procurement orders vendor comparison priority open status items needed buy order",
@@ -129,7 +104,7 @@ TOOL_REGISTRY: dict = {
     ),
     "alerts": (
         "alerts warnings overdue urgent high priority deadlines due soon critical",
-        alerts,
+        check_alerts,
     ),
     "web_search": (
         "current market price latest news search online real time information today cost per unit INR rupees",
@@ -141,7 +116,7 @@ TOOL_REGISTRY: dict = {
     ),
     "scan_email": (
         "check inbox new emails supplier replies any updates messages received",
-        scan_inbox,
+        None,
     ),
     "general": (
         "general question answer help information",
@@ -149,14 +124,10 @@ TOOL_REGISTRY: dict = {
     ),
 }
 
-# Tools that receive the query string as their sole argument.
-QUERY_TOOLS = {"search_documents"}
+QUERY_TOOLS = {"search_documents", "search_web"}
 
 
 if __name__ == "__main__":
+    import uvicorn
     port = int(os.environ.get("PORT", 8080))
-    mcp.run(
-        transport="streamable-http",
-        host="0.0.0.0",
-        port=port,
-    )
+    uvicorn.run(app, host="0.0.0.0", port=port)
