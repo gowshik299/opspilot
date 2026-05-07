@@ -293,7 +293,3 @@ try:
     print("✅ MCP endpoint mounted at /mcp")
 except Exception as e:
     print(f"⚠️ MCP mount failed: {e}")
-
-    @app.get("/mcp")
-    def mcp_fallback():
-        return {"error": "MCP not available", "reason": str(e)}
