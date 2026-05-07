@@ -10,7 +10,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 from rag import embedder
 from memory import save_message, get_history
-from mcp_server import TOOL_REGISTRY, QUERY_TOOLS
+from tool_registry import TOOL_REGISTRY, QUERY_TOOLS
 from cache import get_cached, set_cached
 
 load_dotenv()
