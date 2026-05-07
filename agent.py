@@ -220,6 +220,8 @@ async def run_agent(user_name: str, message: str) -> str:
     else:
         result = "I couldn't understand that request. Please try rephrasing."
 
-    set_cached(message, result)
+    if route in ("procurement", "alerts", "search_documents"):
+        set_cached(message, result, ttl=300)
+
     save_message(user_name, "assistant", result)
     return result
