@@ -279,7 +279,7 @@ def mcp_version():
 
 # ── Mount MCP ─────────────────────────────────
 try:
-    mcp_app = mcp.get_asgi_app()
+    mcp_app = mcp.http_app(path="/")
     app.mount("/mcp", mcp_app)
     print("✅ MCP endpoint mounted at /mcp")
 except Exception as e:
