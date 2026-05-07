@@ -11,6 +11,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 from rag import embedder
 from memory import save_message, get_history
 from mcp_server import TOOL_REGISTRY, QUERY_TOOLS
+from cache import get_cached, set_cached
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -166,6 +167,10 @@ def llm_answer(query: str, chunks: list) -> str:
 # ── Main agent ────────────────────────────────────────────────────────────────
 
 async def run_agent(user_name: str, message: str) -> str:
+    cached = get_cached(message)
+    if cached:
+        return cached
+
     save_message(user_name, "user", message)
     history      = get_history(user_name)
     search_query = rewrite_query(message, history)
@@ -215,5 +220,6 @@ async def run_agent(user_name: str, message: str) -> str:
     else:
         result = "I couldn't understand that request. Please try rephrasing."
 
+    set_cached(message, result)
     save_message(user_name, "assistant", result)
     return result
