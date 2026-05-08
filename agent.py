@@ -17,37 +17,28 @@ from cache import get_cached, set_cached
 MCP_URL = "https://opspilot-mcp-162649919209.asia-south2.run.app/mcp"
 
 async def call_mcp_tool(tool_name: str, arguments: dict = {}) -> str:
-    """Call a tool via MCP server (initialize session, then call tool)"""
     async with httpx.AsyncClient(timeout=30) as client:
         # Step 1: Initialize session
         async with client.stream(
             "POST", MCP_URL,
-            json={
-                "jsonrpc": "2.0", "id": 0, "method": "initialize",
-                "params": {
-                    "protocolVersion": "2024-11-05",
-                    "capabilities": {},
-                    "clientInfo": {"name": "opspilot", "version": "1.0"}
-                }
-            },
-            headers={"Content-Type": "application/json", "Accept": "text/event-stream, application/json"}
+            json={"jsonrpc": "2.0", "id": 0, "method": "initialize",
+                  "params": {"protocolVersion": "2024-11-05", "capabilities": {},
+                             "clientInfo": {"name": "opspilot", "version": "1.0"}}},
+            headers={"Content-Type": "application/json",
+                     "Accept": "text/event-stream, application/json"}
         ) as response:
             session_id = response.headers.get("mcp-session-id", "")
             async for _ in response.aiter_lines():
-                pass  # drain body
+                pass
 
         # Step 2: Call tool
         async with client.stream(
             "POST", MCP_URL,
-            json={
-                "jsonrpc": "2.0", "id": 1, "method": "tools/call",
-                "params": {"name": tool_name, "arguments": arguments}
-            },
-            headers={
-                "Content-Type": "application/json",
-                "Accept": "text/event-stream, application/json",
-                "mcp-session-id": session_id
-            }
+            json={"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                  "params": {"name": tool_name, "arguments": arguments}},
+            headers={"Content-Type": "application/json",
+                     "Accept": "text/event-stream, application/json",
+                     "mcp-session-id": session_id}
         ) as response:
             async for line in response.aiter_lines():
                 if line.startswith("data:"):
