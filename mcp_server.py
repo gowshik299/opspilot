@@ -65,8 +65,7 @@ def search_manuals(query: str) -> str:
 def web_search(query: str) -> str:
     """Search web for current market prices and supplier information"""
     from web_tools import search_web as fn
-    import asyncio
-    return asyncio.run(fn(query))
+    return fn(query)
 
 # FastAPI with MCP lifespan
 mcp_app = mcp.http_app(path="/")
