@@ -308,6 +308,42 @@ def mcp_version():
     }
 
 
+@app.get("/test-mcp")
+async def test_mcp():
+    import httpx
+    import json
+    MCP_URL = "https://opspilot-mcp-162649919209.asia-south2.run.app/mcp"
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        # Initialize
+        async with client.stream(
+            "POST", MCP_URL,
+            json={"jsonrpc": "2.0", "id": 0, "method": "initialize",
+                  "params": {"protocolVersion": "2024-11-05", "capabilities": {},
+                             "clientInfo": {"name": "test", "version": "1.0"}}},
+            headers={"Content-Type": "application/json", "Accept": "text/event-stream"}
+        ) as r:
+            session_id = r.headers.get("mcp-session-id", "")
+            init_text = await r.aread()
+
+        # Call tool
+        async with client.stream(
+            "POST", MCP_URL,
+            json={"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                  "params": {"name": "get_suppliers", "arguments": {}}},
+            headers={"Content-Type": "application/json",
+                     "Accept": "text/event-stream",
+                     "mcp-session-id": session_id}
+        ) as r:
+            result_text = await r.aread()
+
+        return {
+            "session_id": session_id,
+            "init": init_text.decode(),
+            "result": result_text.decode()
+        }
+
+
 # ── Mount MCP ─────────────────────────────────────────────────────────────────
 
 app.mount("/mcp", mcp_app)
