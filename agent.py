@@ -11,7 +11,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 from rag import embedder
 from memory import save_message, get_history
-from tool_registry import TOOL_REGISTRY, QUERY_TOOLS
+from tool_registry import TOOL_REGISTRY
 from cache import get_cached, set_cached
 
 MCP_URL = "https://opspilot-mcp-162649919209.asia-south2.run.app/mcp"
@@ -200,6 +200,15 @@ def llm_answer(query: str, chunks: list) -> str:
 
 # ── Main agent ────────────────────────────────────────────────────────────────
 
+ROUTE_TO_MCP: dict = {
+    "suppliers":        ("get_suppliers",        {}),
+    "alerts":           ("check_alerts",         {}),
+    "scan_email":       ("scan_inbox",           {}),
+    "search_documents": ("search_manuals",       "query"),
+    "web_search":       ("web_search",           "query"),
+}
+
+
 async def run_agent(user_name: str, message: str) -> str:
     cached = get_cached(message)
     if cached:
@@ -210,24 +219,24 @@ async def run_agent(user_name: str, message: str) -> str:
     search_query = rewrite_query(message, history)
     route        = route_query(search_query)
 
-    _, direct_fn = TOOL_REGISTRY.get(route, (None, None))
+    # MCP-routed tools
+    if route in ROUTE_TO_MCP:
+        tool_name, arg = ROUTE_TO_MCP[route]
+        arguments = {arg: search_query} if isinstance(arg, str) else {}
+        result = await call_mcp_tool(tool_name, arguments)
 
-    # Direct single-function tools (no extra logic needed)
-    if direct_fn is not None:
-        result = direct_fn(search_query) if route in QUERY_TOOLS else direct_fn()
-
-    # Web search: fetch then summarise with LLM
+    # Web search: call via MCP then summarise with LLM
     elif route == "web_search":
-        from web_tools import search_web
-        result = summarise_web(search_query, search_web(search_query))
+        raw = await call_mcp_tool("web_search", {"query": search_query})
+        result = summarise_web(search_query, raw)
 
-    # Procurement: retrieve from Excel/DB then answer with LLM
+    # Procurement / general: retrieve from Excel then answer with LLM
     elif route in ("procurement", "general"):
         from retrieval import retrieve
         chunks = retrieve(search_query)
         result = llm_answer(search_query, chunks) if chunks else "No relevant data found. Please rephrase your question."
 
-    # Email: parse intent then send
+    # Email: parse intent then send via MCP
     elif route == "email_supplier":
         from retrieval import retrieve
         chunks  = retrieve(search_query)
@@ -237,13 +246,12 @@ async def run_agent(user_name: str, message: str) -> str:
         if not data or not to_email or to_email == "unknown":
             result = "Couldn't find supplier email. Please specify the supplier name."
         else:
-            from mcp_server import send_supplier_email
-            status = send_supplier_email(
-                to_email,
-                data.get("to_name", ""),
-                data.get("subject", ""),
-                data.get("body", ""),
-            )
+            status = await call_mcp_tool("send_supplier_email", {
+                "to_email": to_email,
+                "to_name":  data.get("to_name", ""),
+                "subject":  data.get("subject", ""),
+                "body":     data.get("body", ""),
+            })
             result = (
                 f"{status}\n\n"
                 f"To: {data.get('to_name')} ({to_email})\n"
