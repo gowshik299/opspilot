@@ -4,6 +4,7 @@ import re
 import json
 import pickle
 import logging
+import httpx
 from dotenv import load_dotenv
 from groq import Groq
 from sklearn.metrics.pairwise import cosine_similarity
@@ -12,6 +13,39 @@ from rag import embedder
 from memory import save_message, get_history
 from tool_registry import TOOL_REGISTRY, QUERY_TOOLS
 from cache import get_cached, set_cached
+
+MCP_URL = "https://opspilot-mcp-162649919209.asia-south2.run.app/mcp"
+
+async def call_mcp_tool(tool_name: str, arguments: dict = {}) -> str:
+    """Call a tool via MCP server"""
+    async with httpx.AsyncClient(timeout=30) as client:
+        response = await client.post(
+            f"{MCP_URL}/messages/",
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "tools/call",
+                "params": {
+                    "name": tool_name,
+                    "arguments": arguments
+                }
+            },
+            headers={
+                "Content-Type": "application/json",
+                "Accept": "text/event-stream"
+            }
+        )
+        for line in response.text.split("\n"):
+            if line.startswith("data:"):
+                try:
+                    data = json.loads(line[5:].strip())
+                    if "result" in data:
+                        content = data["result"].get("content", [])
+                        if content:
+                            return content[0].get("text", "No result")
+                except:
+                    continue
+        return "No result from MCP"
 
 load_dotenv()
 logger = logging.getLogger(__name__)
