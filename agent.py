@@ -17,32 +17,8 @@ from cache import get_cached, set_cached
 MCP_URL = "https://opspilot-mcp-162649919209.asia-south2.run.app/mcp"
 
 async def call_mcp_tool(tool_name: str, arguments: dict = {}) -> str:
-    """Call a tool via MCP server with session handshake"""
+    """Call a tool via MCP server"""
     async with httpx.AsyncClient(timeout=30) as client:
-        # Step 1: Initialize session
-        async with client.stream(
-            "POST",
-            MCP_URL,
-            json={
-                "jsonrpc": "2.0",
-                "id": 0,
-                "method": "initialize",
-                "params": {
-                    "protocolVersion": "2024-11-05",
-                    "capabilities": {},
-                    "clientInfo": {"name": "opspilot", "version": "1.0"}
-                }
-            },
-            headers={
-                "Content-Type": "application/json",
-                "Accept": "text/event-stream"
-            }
-        ) as response:
-            session_id = response.headers.get("mcp-session-id")
-            async for _ in response.aiter_lines():
-                pass  # drain init body so httpx doesn't hang
-
-        # Step 2: Call tool
         async with client.stream(
             "POST",
             MCP_URL,
@@ -57,8 +33,7 @@ async def call_mcp_tool(tool_name: str, arguments: dict = {}) -> str:
             },
             headers={
                 "Content-Type": "application/json",
-                "Accept": "text/event-stream",
-                "mcp-session-id": session_id or ""
+                "Accept": "text/event-stream"
             }
         ) as response:
             async for line in response.aiter_lines():
