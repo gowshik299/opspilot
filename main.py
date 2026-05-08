@@ -313,19 +313,32 @@ async def test_mcp():
     import httpx
     MCP_URL = "https://opspilot-mcp-162649919209.asia-south2.run.app/mcp"
 
-    lines_received = []
     async with httpx.AsyncClient(timeout=30) as client:
+        # Step 1: Initialize
+        async with client.stream(
+            "POST", MCP_URL,
+            json={"jsonrpc": "2.0", "id": 0, "method": "initialize",
+                  "params": {"protocolVersion": "2024-11-05", "capabilities": {},
+                             "clientInfo": {"name": "test", "version": "1.0"}}},
+            headers={"Content-Type": "application/json", "Accept": "text/event-stream"}
+        ) as r:
+            session_id = r.headers.get("mcp-session-id", "")
+            init_lines = [line async for line in r.aiter_lines()]
+
+        # Step 2: Call tool
+        result_lines = []
         async with client.stream(
             "POST", MCP_URL,
             json={"jsonrpc": "2.0", "id": 1, "method": "tools/call",
                   "params": {"name": "get_suppliers", "arguments": {}}},
             headers={"Content-Type": "application/json",
-                     "Accept": "text/event-stream"}
+                     "Accept": "text/event-stream",
+                     "mcp-session-id": session_id}
         ) as r:
             async for line in r.aiter_lines():
-                lines_received.append(line)
+                result_lines.append(line)
 
-    return {"lines": lines_received}
+    return {"session_id": session_id, "init": init_lines, "result": result_lines}
 
 
 # ── Mount MCP ─────────────────────────────────────────────────────────────────
