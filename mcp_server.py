@@ -1,4 +1,5 @@
 # mcp_server.py - Standalone MCP Server
+# updated
 import os
 from fastmcp import FastMCP
 from contextlib import asynccontextmanager
