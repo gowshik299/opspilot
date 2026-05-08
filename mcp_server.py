@@ -1,11 +1,9 @@
 # mcp_server.py - Standalone MCP Server
-# updated
 import os
 from fastmcp import FastMCP
-from contextlib import asynccontextmanager
-from fastapi import FastAPI
 
 mcp = FastMCP("opspilot-procurement")
+
 
 @mcp.tool()
 def get_suppliers() -> str:
@@ -82,22 +80,11 @@ def send_supplier_email(to_email: str, to_name: str, subject: str, body: str) ->
     from gmail import send_email as fn
     return fn(to_email, to_name, subject, body)
 
-# FastAPI with MCP lifespan
-mcp_app = mcp.http_app(path="/")
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    async with mcp_app.router.lifespan_context(app):
-        yield
-
-app = FastAPI(title="OpsPilot MCP Server", lifespan=lifespan)
-app.mount("/mcp", mcp_app)
-
-@app.get("/health")
-def health():
-    return {"status": "running", "service": "opspilot-mcp"}
+# ── Run directly — no FastAPI wrapper, avoids nested mount 404s ───────────────
 
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8080))
+    app = mcp.http_app(path="/mcp")
     uvicorn.run(app, host="0.0.0.0", port=port)
