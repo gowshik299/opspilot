@@ -126,6 +126,11 @@ async def serve_ui():
     with open("static/index.html", "r", encoding="utf-8") as f:
         return f.read()
 
+@app.get("/app", response_class=HTMLResponse)
+async def serve_app():
+    with open("static/index.html", "r", encoding="utf-8") as f:
+        return f.read()
+
 
 # ── Health ────────────────────────────────────────────────────────────────────
 
