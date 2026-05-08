@@ -30,7 +30,7 @@ async def call_mcp_tool(tool_name: str, arguments: dict = {}) -> str:
                     "clientInfo": {"name": "opspilot", "version": "1.0"}
                 }
             },
-            headers={"Content-Type": "application/json", "Accept": "application/json, text/event-stream, */*"}
+            headers={"Content-Type": "application/json", "Accept": "text/event-stream, application/json"}
         ) as response:
             session_id = response.headers.get("mcp-session-id", "")
             async for _ in response.aiter_lines():
@@ -45,7 +45,7 @@ async def call_mcp_tool(tool_name: str, arguments: dict = {}) -> str:
             },
             headers={
                 "Content-Type": "application/json",
-                "Accept": "application/json, text/event-stream, */*",
+                "Accept": "text/event-stream, application/json",
                 "mcp-session-id": session_id
             }
         ) as response:
