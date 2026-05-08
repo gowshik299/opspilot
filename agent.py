@@ -39,6 +39,8 @@ async def call_mcp_tool(tool_name: str, arguments: dict = {}) -> str:
             }
         ) as response:
             session_id = response.headers.get("mcp-session-id")
+            async for _ in response.aiter_lines():
+                pass  # drain init body so httpx doesn't hang
 
         # Step 2: Call tool
         async with client.stream(
@@ -225,11 +227,11 @@ def llm_answer(query: str, chunks: list) -> str:
 # ── Main agent ────────────────────────────────────────────────────────────────
 
 ROUTE_TO_MCP: dict = {
-    "suppliers":        ("get_suppliers",        {}),
-    "alerts":           ("check_alerts",         {}),
-    "scan_email":       ("scan_inbox",           {}),
-    "search_documents": ("search_manuals",       "query"),
-    "web_search":       ("web_search",           "query"),
+    "suppliers":        ("get_suppliers",  {}),
+    "alerts":           ("check_alerts",   {}),
+    "scan_email":       ("scan_inbox",     {}),
+    "search_documents": ("search_manuals", "query"),
+    # web_search handled separately — needs LLM summarization after MCP call
 }
 
 

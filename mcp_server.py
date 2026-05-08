@@ -65,7 +65,22 @@ def search_manuals(query: str) -> str:
 def web_search(query: str) -> str:
     """Search web for current market prices and supplier information"""
     from web_tools import search_web as fn
-    return fn(query)
+    result = fn(query)
+    if isinstance(result, dict):
+        return "\n".join(r.get("content", "")[:300] for r in result.get("results", [])[:3])
+    return str(result)
+
+@mcp.tool()
+def scan_inbox() -> str:
+    """Check Gmail inbox for recent supplier replies"""
+    from gmail import scan_inbox as fn
+    return fn(last_n=10)
+
+@mcp.tool()
+def send_supplier_email(to_email: str, to_name: str, subject: str, body: str) -> str:
+    """Send an email to a supplier"""
+    from gmail import send_email as fn
+    return fn(to_email, to_name, subject, body)
 
 # FastAPI with MCP lifespan
 mcp_app = mcp.http_app(path="/")
