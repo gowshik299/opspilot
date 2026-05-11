@@ -1,111 +1,145 @@
 # tools.py
-import pandas as pd
-from config import EXCEL_FILE
+import os
+from sqlalchemy import create_engine, text
 
+DATABASE_URL = os.getenv("DATABASE_URL")
+engine = create_engine(DATABASE_URL)
 
-def read_sheet(sheet: str) -> pd.DataFrame:
-    return pd.read_excel(EXCEL_FILE, sheet_name=sheet).fillna("")
-
-
-def safe_int(x) -> int:
+def safe_int(val) -> int:
     try:
-        return int(float(x))
-    except Exception:
+        return int(val)
+    except:
         return 0
 
+def query_db(sql: str, params: dict = {}) -> list:
+    """Execute SQL and return list of dicts"""
+    try:
+        with engine.connect() as conn:
+            result = conn.execute(text(sql), params)
+            columns = result.keys()
+            return [dict(zip(columns, row)) for row in result]
+    except Exception as e:
+        return []
 
 # ── Suppliers ─────────────────────────────────
 
 def get_suppliers() -> str:
     try:
-        df = read_sheet("Suppliers").head(8)
+        rows = query_db("SELECT supplier_name, city, category FROM suppliers LIMIT 8")
+        if not rows:
+            return "No suppliers found."
         return "\n".join(
-            f"• {r['Supplier_Name']} — {r['City']} — {r['Category']}"
-            for _, r in df.iterrows()
+            f"• {r['supplier_name']} — {r['city']} — {r['category']}"
+            for r in rows
         )
     except Exception as e:
         return f"Supplier error: {e}"
 
-
 def top_suppliers() -> str:
     try:
-        top = read_sheet("Procurement_History")["Supplier"].value_counts().head(5)
-        return "\n".join(f"• {n} — {c} orders" for n, c in top.items())
+        rows = query_db("""
+            SELECT supplier, COUNT(*) as order_count 
+            FROM procurement_history 
+            GROUP BY supplier 
+            ORDER BY order_count DESC 
+            LIMIT 5
+        """)
+        if not rows:
+            return "No procurement history found."
+        return "\n".join(f"• {r['supplier']} — {r['order_count']} orders" for r in rows)
     except Exception as e:
         return f"Top supplier error: {e}"
 
-
 def suppliers_by_city(city: str) -> str:
     try:
-        df = read_sheet("Suppliers")
-        data = df[df["City"].astype(str).str.lower().str.contains(city.lower())].head(8)
-        if data.empty:
+        rows = query_db(
+            "SELECT supplier_name, category FROM suppliers WHERE LOWER(city) LIKE :city LIMIT 8",
+            {"city": f"%{city.lower()}%"}
+        )
+        if not rows:
             return "No suppliers found."
-        return "\n".join(f"• {r['Supplier_Name']} — {r['Category']}" for _, r in data.iterrows())
+        return "\n".join(f"• {r['supplier_name']} — {r['category']}" for r in rows)
     except Exception as e:
         return f"City supplier error: {e}"
-
 
 # ── Procurement ───────────────────────────────
 
 def get_procurement_history() -> str:
     try:
-        df = read_sheet("Procurement_History").head(6)
+        rows = query_db("""
+            SELECT supplier, category, total_price_inr 
+            FROM procurement_history 
+            ORDER BY id DESC LIMIT 6
+        """)
+        if not rows:
+            return "No procurement history found."
         return "\n".join(
-            f"• {r['Supplier']} — {r['Category']} — ₹{r['Total_Price_INR']}"
-            for _, r in df.iterrows()
+            f"• {r['supplier']} — {r['category']} — ₹{r['total_price_inr']}"
+            for r in rows
         )
     except Exception as e:
         return f"History error: {e}"
 
-
 def spend_summary() -> str:
     try:
-        df = read_sheet("Procurement_History")
-        total = safe_int(df["Total_Price_INR"].sum())
-        by_cat = (
-            df.groupby("Category")["Total_Price_INR"]
-            .sum().sort_values(ascending=False).head(5)
-        )
+        total_rows = query_db("SELECT SUM(total_price_inr) as total FROM procurement_history")
+        total = safe_int(total_rows[0]['total']) if total_rows else 0
+
+        cat_rows = query_db("""
+            SELECT category, SUM(total_price_inr) as total
+            FROM procurement_history
+            GROUP BY category
+            ORDER BY total DESC
+            LIMIT 5
+        """)
         lines = [f"Total Spend: ₹{total}"]
-        lines += [f"• {cat} — ₹{safe_int(val)}" for cat, val in by_cat.items()]
+        lines += [f"• {r['category']} — ₹{safe_int(r['total'])}" for r in cat_rows]
         return "\n".join(lines)
     except Exception as e:
         return f"Spend error: {e}"
 
-
 def highest_purchase() -> str:
     try:
-        df = read_sheet("Procurement_History")
-        r = df.loc[df["Total_Price_INR"].idxmax()]
-        return f"• Supplier: {r['Supplier']}\n• Category: {r['Category']}\n• Amount: ₹{r['Total_Price_INR']}"
+        rows = query_db("""
+            SELECT supplier, category, total_price_inr
+            FROM procurement_history
+            ORDER BY total_price_inr DESC
+            LIMIT 1
+        """)
+        if not rows:
+            return "No data found."
+        r = rows[0]
+        return f"• Supplier: {r['supplier']}\n• Category: {r['category']}\n• Amount: ₹{r['total_price_inr']}"
     except Exception as e:
         return f"Highest purchase error: {e}"
-
 
 # ── Alerts ────────────────────────────────────
 
 def check_alerts() -> str:
     try:
-        df = read_sheet("Pending_Requirements")
-        high = df[df["Priority"].astype(str).str.lower().eq("high")].head(6)
-        if high.empty:
+        rows = query_db("""
+            SELECT item_name, status
+            FROM pending_requirements
+            WHERE LOWER(priority) = 'high'
+            LIMIT 6
+        """)
+        if not rows:
             return "No urgent alerts."
-        return "\n".join(f"• {r['Item_Name']} ({r['Status']})" for _, r in high.iterrows())
+        return "\n".join(f"• {r['item_name']} ({r['status']})" for r in rows)
     except Exception as e:
         return f"Alert error: {e}"
 
-
 def pending_summary() -> str:
     try:
-        df = read_sheet("Pending_Requirements")
-        open_items = len(df[df["Status"].astype(str).str.lower().eq("open")])
-        return f"• Total Pending: {len(df)}\n• Open Items: {open_items}"
+        total_rows = query_db("SELECT COUNT(*) as total FROM pending_requirements")
+        open_rows = query_db("SELECT COUNT(*) as total FROM pending_requirements WHERE LOWER(status) = 'open'")
+        total = total_rows[0]['total'] if total_rows else 0
+        open_count = open_rows[0]['total'] if open_rows else 0
+        return f"• Total Pending: {total}\n• Open Items: {open_count}"
     except Exception as e:
         return f"Pending error: {e}"
 
-
-# ── Invoices (PostgreSQL via memory.py) ──────────────────────────
+# ── Invoices ──────────────────────────────────
 
 def get_invoice_summary() -> str:
     try:
@@ -119,30 +153,13 @@ def get_invoice_summary() -> str:
     except Exception as e:
         return f"Invoice error: {e}"
 
-
 def highest_invoice() -> str:
     try:
         from memory import get_invoices
         rows = get_invoices()
         if not rows:
             return "No invoices found."
-        top = max(rows, key=lambda r: float(r.get("amount") or 0))
-        return f"• {top['vendor_name']} — ₹{top['amount']}"
+        highest = max(rows, key=lambda x: x.get('amount', 0))
+        return f"• Vendor: {highest['vendor_name']}\n• Amount: ₹{highest['amount']}"
     except Exception as e:
-        return f"Highest invoice error: {e}"
-
-
-# ── Registry ──────────────────────────────────
-
-TOOLS = {
-    "get_suppliers":          get_suppliers,
-    "top_suppliers":          top_suppliers,
-    "suppliers_by_city":      suppliers_by_city,
-    "get_procurement_history":get_procurement_history,
-    "spend_summary":          spend_summary,
-    "highest_purchase":       highest_purchase,
-    "check_alerts":           check_alerts,
-    "pending_summary":        pending_summary,
-    "get_invoice_summary":    get_invoice_summary,
-    "highest_invoice":        highest_invoice,
-}
+        return f"Invoice error: {e}"
