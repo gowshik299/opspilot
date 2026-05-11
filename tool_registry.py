@@ -11,15 +11,15 @@ TOOL_REGISTRY = {
         search_documents,
     ),
     "suppliers": (
-        "show list suppliers vendor approved supplier contact details name city category",
+        "suppliers vendor list approved supplier contact details name city category top suppliers best supplier who are suppliers show suppliers",
         get_suppliers,
     ),
     "procurement": (
-        "pending requirements suppliers purchase history spending budget invoices procurement orders vendor comparison priority open status items needed buy order",
+        "pending requirements purchase history spending budget invoices procurement orders vendor comparison priority open status items needed buy order total spend highest purchase",
         None,
     ),
     "alerts": (
-        "alerts warnings overdue urgent high priority deadlines due soon critical",
+        "alerts warnings overdue urgent high priority deadlines due soon critical pending high priority items",
         check_alerts,
     ),
     "web_search": (
