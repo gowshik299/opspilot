@@ -131,11 +131,22 @@ def check_alerts() -> str:
 
 def pending_summary() -> str:
     try:
-        total_rows = query_db("SELECT COUNT(*) as total FROM pending_requirements")
-        open_rows = query_db("SELECT COUNT(*) as total FROM pending_requirements WHERE LOWER(status) = 'open'")
-        total = total_rows[0]['total'] if total_rows else 0
-        open_count = open_rows[0]['total'] if open_rows else 0
-        return f"• Total Pending: {total}\n• Open Items: {open_count}"
+        rows = query_db("""
+            SELECT req_id, item_name, category, priority, status
+            FROM pending_requirements
+            ORDER BY
+                CASE priority
+                    WHEN 'High' THEN 1
+                    WHEN 'Medium' THEN 2
+                    WHEN 'Low' THEN 3
+                END
+        """)
+        if not rows:
+            return "No pending requirements found."
+        lines = [f"Total Pending: {len(rows)}"]
+        for r in rows:
+            lines.append(f"• {r['req_id']}: {r['item_name']} ({r['priority']} Priority) — {r['status']}")
+        return "\n".join(lines)
     except Exception as e:
         return f"Pending error: {e}"
 
