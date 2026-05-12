@@ -144,15 +144,17 @@ def store_chunks_pgvector(chunks: list, embeddings):
 def search_pgvector(query_embedding: list, top_k: int = 10) -> list:
     """Search similar chunks using pgvector cosine similarity"""
     engine = get_db_engine()
+    embedding_str = str(query_embedding)
+
     with engine.connect() as conn:
         results = conn.execute(text("""
             SELECT source, chunk_text,
-                   1 - (embedding <=> :query_vec::vector) as similarity
+                   1 - (embedding <=> CAST(:query_vec AS vector)) as similarity
             FROM document_chunks
-            ORDER BY embedding <=> :query_vec::vector
+            ORDER BY embedding <=> CAST(:query_vec AS vector)
             LIMIT :top_k
         """), {
-            "query_vec": str(query_embedding),
+            "query_vec": embedding_str,
             "top_k": top_k
         })
         return [
