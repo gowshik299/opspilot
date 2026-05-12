@@ -206,10 +206,11 @@ def llm_answer(query: str, chunks: list) -> str:
 # ── Main agent ────────────────────────────────────────────────────────────────
 
 ROUTE_TO_MCP: dict = {
-    "suppliers":        ("get_suppliers",  {}),
-    "alerts":           ("check_alerts",   {}),
-    "scan_email":       ("scan_inbox",     {}),
-    "search_documents": ("search_manuals", "query"),
+    "suppliers":        ("get_suppliers",        {}),
+    "alerts":           ("check_alerts",         {}),
+    "pending":          ("pending_requirements", {}),
+    "scan_email":       ("scan_inbox",           {}),
+    "search_documents": ("search_manuals",       "query"),
     # web_search handled separately — needs LLM summarization after MCP call
 }
 

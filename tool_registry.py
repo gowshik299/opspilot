@@ -7,7 +7,7 @@ from rag import search_documents
 
 TOOL_REGISTRY = {
     "search_documents": (
-        "safety procedures PPE protective equipment high voltage transformer maintenance outage procedures equipment manual technical specifications insulation voltage lineman work permit lockout",
+        "safety procedures PPE protective equipment high voltage transformer maintenance outage procedures equipment manual technical specifications insulation voltage lineman work permit lockout fire extinguisher checklist inspection",
         search_documents,
     ),
     "suppliers": (
@@ -15,12 +15,16 @@ TOOL_REGISTRY = {
         get_suppliers,
     ),
     "procurement": (
-        "pending requirements purchase history spending budget invoices procurement orders vendor comparison priority open status items needed buy order total spend highest purchase",
+        "purchase history spending budget procurement orders vendor comparison total spend highest purchase order history buying records",
         None,
     ),
     "alerts": (
-        "alerts warnings overdue urgent high priority deadlines due soon critical pending high priority items",
+        "alerts warnings overdue urgent high priority deadlines due soon critical",
         check_alerts,
+    ),
+    "pending": (
+        "pending requirements show pending open items requisitions what needs to be ordered pending list requirements status",
+        pending_summary,
     ),
     "web_search": (
         "current market price latest news search online real time information today cost per unit INR rupees",
