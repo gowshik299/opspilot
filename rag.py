@@ -1,5 +1,5 @@
 # rag.py
-# RAG V8 — BM25 + Sentence Transformers Hybrid
+# RAG V9 — BM25 + pgvector Hybrid
 
 import os
 import re
@@ -14,6 +14,7 @@ from dotenv import load_dotenv
 from groq import Groq
 from sklearn.metrics.pairwise import cosine_similarity
 from sentence_transformers import SentenceTransformer
+from sqlalchemy import create_engine, text
 
 from config import DOCUMENTS_DIR, RAG_STORE, PDF_FILES
 
@@ -115,22 +116,17 @@ class BM25:
         return [self.score(query, i) for i in range(self.N)]
 
 
-# ── Build index ───────────────────────────────
-
 # ── pgvector functions ────────────────────────
+
+def get_db_engine():
+    return create_engine(os.getenv("DATABASE_URL"))
+
 
 def store_chunks_pgvector(chunks: list, embeddings):
     """Store chunks and embeddings in PostgreSQL"""
-    from sqlalchemy import create_engine, text
-    import os
-    
-    engine = create_engine(os.getenv("DATABASE_URL"))
-    
+    engine = get_db_engine()
     with engine.connect() as conn:
-        # Clear existing chunks
         conn.execute(text("DELETE FROM document_chunks"))
-        
-        # Insert new chunks
         for i, chunk in enumerate(chunks):
             embedding_list = embeddings[i].tolist()
             conn.execute(text("""
@@ -141,39 +137,31 @@ def store_chunks_pgvector(chunks: list, embeddings):
                 "text": chunk["text"],
                 "embedding": str(embedding_list)
             })
-        
         conn.commit()
     print(f"✅ Stored {len(chunks)} chunks in pgvector")
 
 
 def search_pgvector(query_embedding: list, top_k: int = 10) -> list:
-    """Search similar chunks using pgvector"""
-    from sqlalchemy import create_engine, text
-    import os
-    
-    engine = create_engine(os.getenv("DATABASE_URL"))
-    
+    """Search similar chunks using pgvector cosine similarity"""
+    engine = get_db_engine()
     with engine.connect() as conn:
         results = conn.execute(text("""
             SELECT source, chunk_text,
-                   1 - (embedding <=> :query_vec) as similarity
+                   1 - (embedding <=> :query_vec::vector) as similarity
             FROM document_chunks
-            ORDER BY embedding <=> :query_vec
+            ORDER BY embedding <=> :query_vec::vector
             LIMIT :top_k
         """), {
             "query_vec": str(query_embedding),
             "top_k": top_k
         })
-        
         return [
-            {
-                "source": r[0],
-                "text": r[1],
-                "score": float(r[2])
-            }
+            {"source": r[0], "text": r[1], "score": float(r[2])}
             for r in results
         ]
 
+
+# ── Build index ───────────────────────────────
 
 def build_index():
     logger.info("Building RAG index...")
@@ -193,7 +181,7 @@ def build_index():
 
     texts = [c["text"] for c in all_chunks]
 
-    # BM25 still uses pickle (for keyword search)
+    # BM25 uses pickle (keyword search)
     bm25 = BM25(texts)
     with open(RAG_STORE, "wb") as f:
         pickle.dump((bm25, all_chunks), f)
@@ -202,8 +190,6 @@ def build_index():
     print(f"Embedding {len(texts)} chunks...")
     embeddings = embedder.encode(texts, show_progress_bar=True)
     embeddings = np.array(embeddings)
-    
-    # Store in PostgreSQL
     store_chunks_pgvector(all_chunks, embeddings)
 
     print(f"✅ Index built: {len(all_chunks)} chunks")
@@ -218,48 +204,6 @@ def load_index():
         return pickle.load(f)
 
 
-def retrieve_candidates(query: str, top_k: int = 10) -> list:
-    """Hybrid search: BM25 + pgvector"""
-    bm25, all_chunks = load_index()
-    
-    # BM25 keyword search
-    query_tokens = query.lower().split()
-    bm25_scores = bm25.get_scores(query_tokens)
-    bm25_top = np.argsort(bm25_scores)[::-1][:top_k]
-    
-    # pgvector semantic search
-    query_embedding = embedder.encode([query])[0].tolist()
-    pg_results = search_pgvector(query_embedding, top_k)
-    
-    # Combine results
-    seen = set()
-    combined = []
-    
-    # Add pgvector results first (semantic)
-    for r in pg_results:
-        key = r["text"][:50]
-        if key not in seen:
-            seen.add(key)
-            combined.append({
-                "text": r["text"],
-                "source": r["source"],
-                "score": r["score"] * 0.6  # 60% weight
-            })
-    
-    # Add BM25 results
-    for idx in bm25_top:
-        if idx < len(all_chunks):
-            chunk = all_chunks[idx]
-            key = chunk["text"][:50]
-            if key not in seen:
-                seen.add(key)
-                combined.append({
-                    "text": chunk["text"],
-                    "source": chunk["source"],
-                    "score": float(bm25_scores[idx]) * 0.4  # 40% weight
-                })
-    
-    return sorted(combined, key=lambda x: x["score"], reverse=True)[:top_k]
 # ── Retrieval ─────────────────────────────────
 
 def _norm(scores: list) -> list:
@@ -269,32 +213,52 @@ def _norm(scores: list) -> list:
 
 
 def retrieve_candidates(query: str, top_k: int = 10) -> list:
-    bm25, embeddings, meta = load_index()
+    """Hybrid search: BM25 (40%) + pgvector (60%)"""
+    bm25, all_chunks = load_index()
 
+    # Expand query with synonyms
     expanded = query + " " + " ".join(
         t for k, ts in SYNONYMS.items() if k in query.lower() for t in ts
     )
 
-    bm25_norm = _norm(bm25.scores(expanded))
+    # BM25 keyword search
+    bm25_scores = bm25.scores(expanded)
+    bm25_norm = _norm(bm25_scores)
 
-    query_emb = embedder.encode([query])
-    semantic_scores = cosine_similarity(query_emb, embeddings)[0]
-    semantic_norm = _norm(semantic_scores.tolist())
+    # pgvector semantic search
+    query_embedding = embedder.encode([query])[0].tolist()
+    pg_results = search_pgvector(query_embedding, top_k)
 
-    ql = query.lower()
-    boosted = {s for k, srcs in TOPIC_BOOSTS.items() if k in ql for s in srcs}
-    qwords = set(re.findall(r"[a-z0-9]+", ql))
+    # Combine results
+    seen = set()
+    combined = []
 
-    scored = []
-    for i, chunk in enumerate(meta):
-        h = 0.40 * bm25_norm[i] + 0.60 * semantic_norm[i]
-        h += len(qwords & set(re.findall(r"[a-z0-9]+", chunk["text"].lower()))) * 0.01
-        if chunk["source"] in boosted:
-            h += 0.10
-        scored.append((h, i))
+    # pgvector results (60% weight)
+    for r in pg_results:
+        key = r["text"][:50]
+        if key not in seen:
+            seen.add(key)
+            combined.append({
+                "text": r["text"],
+                "source": r["source"],
+                "score": r["score"] * 0.6
+            })
 
-    scored.sort(reverse=True)
-    return [dict(**meta[i], score=round(s, 4)) for s, i in scored[:top_k] if s > 0.01]
+    # BM25 results (40% weight)
+    bm25_top = np.argsort(bm25_scores)[::-1][:top_k]
+    for idx in bm25_top:
+        if idx < len(all_chunks):
+            chunk = all_chunks[idx]
+            key = chunk["text"][:50]
+            if key not in seen:
+                seen.add(key)
+                combined.append({
+                    "text": chunk["text"],
+                    "source": chunk["source"],
+                    "score": float(bm25_norm[idx]) * 0.4
+                })
+
+    return sorted(combined, key=lambda x: x["score"], reverse=True)[:top_k]
 
 
 # ── MMR ───────────────────────────────────────
