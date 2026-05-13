@@ -307,6 +307,14 @@ def mcp_version():
         "methods": [m for m in dir(fastmcp.FastMCP) if not m.startswith("_")]
     }
 
+@app.get("/test-langsmith")
+async def test_langsmith():
+    return {
+        "LANGCHAIN_TRACING_V2": os.environ.get("LANGCHAIN_TRACING_V2"),
+        "LANGCHAIN_API_KEY": os.environ.get("LANGCHAIN_API_KEY", "")[:20] + "...",
+        "LANGCHAIN_PROJECT": os.environ.get("LANGCHAIN_PROJECT"),
+    }
+
 
 @app.get("/test-mcp")
 async def test_mcp():
