@@ -9,6 +9,8 @@ from dotenv import load_dotenv
 from groq import Groq
 from sklearn.metrics.pairwise import cosine_similarity
 
+from langsmith import traceable
+
 from rag import embedder
 from memory import save_message, get_history
 from tool_registry import TOOL_REGISTRY
@@ -99,6 +101,7 @@ def route_query(query: str) -> str:
 
 # ── Query rewriter ────────────────────────────────────────────────────────────
 
+@traceable(name="rewrite_query")
 def rewrite_query(query: str, history: list) -> str:
     if not history:
         return query
@@ -180,6 +183,7 @@ def summarise_web(query: str, results) -> str:
 
 # ── LLM answer over retrieval chunks ─────────────────────────────────────────
 
+@traceable(name="llm_answer")
 def llm_answer(query: str, chunks: list) -> str:
     context = "\n".join(
         f"[{i+1}] {c['source']}\n{c['text']}"
@@ -214,6 +218,7 @@ ROUTE_TO_MCP: dict = {
 }
 
 
+@traceable(name="run_agent")
 async def run_agent(user_name: str, message: str) -> str:
     cached = get_cached(message)
     if cached:

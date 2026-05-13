@@ -16,6 +16,8 @@ from sklearn.metrics.pairwise import cosine_similarity
 from sentence_transformers import SentenceTransformer
 from sqlalchemy import create_engine, text
 
+from langsmith import traceable
+
 from config import DOCUMENTS_DIR, RAG_STORE, PDF_FILES
 
 load_dotenv()
@@ -214,6 +216,7 @@ def _norm(scores: list) -> list:
     return (arr / mx if mx > 0 else arr).tolist()
 
 
+@traceable(name="retrieve_candidates")
 def retrieve_candidates(query: str, top_k: int = 10) -> list:
     """Hybrid search: BM25 (40%) + pgvector (60%)"""
     bm25, all_chunks = load_index()
@@ -310,6 +313,7 @@ def rerank_chunks(query: str, chunks: list) -> list:
 
 # ── Answer ────────────────────────────────────
 
+@traceable(name="grounded_answer")
 def grounded_answer(query: str, chunks: list) -> str:
     context = "\n".join(
         f"[{i+1}] {c['source']} p{c.get('page','')}\n{c['text'][:1200]}"
