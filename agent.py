@@ -9,7 +9,9 @@ from dotenv import load_dotenv
 from groq import Groq
 from sklearn.metrics.pairwise import cosine_similarity
 
-from langsmith import traceable
+from langsmith import traceable, Client
+
+ls_client = Client()
 
 from rag import embedder
 from memory import save_message, get_history
@@ -218,7 +220,7 @@ ROUTE_TO_MCP: dict = {
 }
 
 
-@traceable(name="run_agent")
+@traceable(run_type="chain", name="OpsPilot Agent")
 async def run_agent(user_name: str, message: str) -> str:
     cached = get_cached(message)
     if cached:

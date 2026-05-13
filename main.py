@@ -309,11 +309,24 @@ def mcp_version():
 
 @app.get("/test-langsmith")
 async def test_langsmith():
-    return {
-        "LANGCHAIN_TRACING_V2": os.environ.get("LANGCHAIN_TRACING_V2"),
-        "LANGCHAIN_API_KEY": os.environ.get("LANGCHAIN_API_KEY", "")[:20] + "...",
-        "LANGCHAIN_PROJECT": os.environ.get("LANGCHAIN_PROJECT"),
-    }
+    try:
+        import langsmith
+        ls_version = langsmith.__version__
+
+        from langsmith import Client
+        client = Client()
+        projects = list(client.list_projects())
+        project_names = [p.name for p in projects]
+
+        return {
+            "LANGCHAIN_TRACING_V2": os.environ.get("LANGCHAIN_TRACING_V2"),
+            "LANGCHAIN_API_KEY": os.environ.get("LANGCHAIN_API_KEY", "")[:20] + "...",
+            "LANGCHAIN_PROJECT": os.environ.get("LANGCHAIN_PROJECT"),
+            "langsmith_version": ls_version,
+            "projects": project_names,
+        }
+    except Exception as e:
+        return {"error": str(e)}
 
 
 @app.get("/test-mcp")
