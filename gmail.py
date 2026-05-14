@@ -17,6 +17,13 @@ load_dotenv()
 SENDER_EMAIL = os.getenv("GMAIL", "")
 
 
+def clean_email_body(text: str) -> str:
+    import re
+    text = re.sub(r'<[^>]+>', ' ', text)
+    text = text.replace('&nbsp;', ' ').replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>').replace('&quot;', '"')
+    return re.sub(r'\s+', ' ', text).strip()
+
+
 def setup_gmail(gmail: str, app_password: str) -> bool:
     try:
         server = smtplib.SMTP_SSL("smtp.gmail.com", 465)

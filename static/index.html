@@ -349,6 +349,16 @@
     <!-- TOAST STACK -->
     <div class="toast-stack" id="toastStack"></div>
 
+    <!-- EMAIL MODAL -->
+    <div class="modal-bg" id="emailModal" onclick="if(event.target===this)closeEmailModal()">
+        <div class="modal-box" style="max-width:600px">
+            <button class="modal-close" onclick="closeEmailModal()">✕</button>
+            <div class="modal-title" id="emailModalSubject">Email</div>
+            <div class="modal-sub" id="emailModalFrom"></div>
+            <div style="margin-top:16px;padding:16px;background:var(--card);border-radius:8px;white-space:pre-wrap;font-size:13px;line-height:1.6;color:var(--snow)" id="emailModalBody"></div>
+        </div>
+    </div>
+
     <script>
         /* ══════════════════════════════════════════
            STATE
@@ -943,15 +953,7 @@
             if (p === "alerts") { loadAlerts(); return; }
             updateDashboardStats();
         }
-        <!-- EMAIL MODAL -->
-        <div class="modal-bg" id="emailModal" onclick="if(event.target===this)closeEmailModal()">
-            <div class="modal-box" style="max-width:600px">
-                <button class="modal-close" onclick="closeEmailModal()">✕</button>
-                <div class="modal-title" id="emailModalSubject">Email</div>
-                <div class="modal-sub" id="emailModalFrom"></div>
-                <div style="margin-top:16px;padding:16px;background:var(--card);border-radius:8px;white-space:pre-wrap;font-size:13px;line-height:1.6;color:var(--snow)" id="emailModalBody"></div>
-            </div>
-        </div>
+
         /* ══════════════════════════════════════════
            TOASTS
         ══════════════════════════════════════════ */
