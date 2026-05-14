@@ -35,7 +35,7 @@ TOOL_REGISTRY = {
         None,
     ),
     "scan_email": (
-        "check inbox new emails supplier replies any updates messages received",
+        "check gmail inbox scan inbox supplier email replies received messages unread emails check mail inbox",
         None,
     ),
     "general": (
