@@ -6,10 +6,18 @@ import pickle
 import logging
 import httpx
 from dotenv import load_dotenv
+load_dotenv()
+
 from langchain_groq import ChatGroq
 from sklearn.metrics.pairwise import cosine_similarity
 
+import langsmith
 from langsmith import traceable, Client
+
+# Force initialize LangSmith
+os.environ["LANGCHAIN_TRACING_V2"] = "true"
+os.environ["LANGCHAIN_API_KEY"] = os.getenv("LANGSMITH_API_KEY", "")
+os.environ["LANGCHAIN_PROJECT"] = os.getenv("LANGSMITH_PROJECT", "opspilot")
 
 ls_client = Client()
 
@@ -56,7 +64,6 @@ async def call_mcp_tool(tool_name: str, arguments: dict = {}) -> str:
                         continue
     return "No result from MCP"
 
-load_dotenv()
 logger = logging.getLogger(__name__)
 
 llm = ChatGroq(
@@ -204,7 +211,7 @@ ROUTE_TO_MCP: dict = {
 }
 
 
-@traceable(run_type="chain", name="OpsPilot Agent")
+@traceable(name="OpsPilot Agent", run_type="chain")
 async def run_agent(user_name: str, message: str) -> str:
     cached = get_cached(message)
     if cached:
