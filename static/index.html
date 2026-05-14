@@ -346,26 +346,18 @@
         </div>
     </div>
 
-    <!-- TOAST STACK -->
-    <div class="toast-stack" id="toastStack"></div>
-
     <!-- EMAIL MODAL -->
-    <div id="emailModal" onclick="if(event.target===this)closeEmailModal()"
-        style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:9999;align-items:center;justify-content:center;">
-        <div style="background:#1a1a2e;border:1px solid #2a2a4a;border-radius:12px;width:90%;max-width:620px;max-height:80vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,0.6);">
-            <!-- Header -->
-            <div style="padding:16px 20px;border-bottom:1px solid #2a2a4a;display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
-                <div style="flex:1;min-width:0;">
-                    <div id="emailModalSubject" style="font-size:15px;font-weight:600;color:#f0f0f0;margin-bottom:4px;word-break:break-word;"></div>
-                    <div id="emailModalFrom" style="font-size:12px;color:#8888aa;"></div>
-                </div>
-                <button onclick="closeEmailModal()" style="background:none;border:none;color:#8888aa;font-size:18px;cursor:pointer;padding:0;line-height:1;flex-shrink:0;">✕</button>
-            </div>
-            <!-- Body -->
-            <div id="emailModalBody"
-                style="padding:20px;overflow-y:auto;font-size:13px;line-height:1.7;color:#d0d0e0;white-space:pre-wrap;word-break:break-word;flex:1;"></div>
+    <div class="modal-bg" id="emailModal" onclick="if(event.target===this)closeEmailModal()">
+        <div class="modal-box" style="max-width:600px">
+            <button class="modal-close" onclick="closeEmailModal()">✕</button>
+            <div class="modal-title" id="emailModalSubject">Email</div>
+            <div class="modal-sub" id="emailModalFrom"></div>
+            <div style="margin-top:16px;padding:16px;background:var(--card);border-radius:8px;white-space:pre-wrap;font-size:13px;line-height:1.6;color:var(--snow)" id="emailModalBody"></div>
         </div>
     </div>
+
+    <!-- TOAST STACK -->
+    <div class="toast-stack" id="toastStack"></div>
 
     <script>
         /* ══════════════════════════════════════════
@@ -855,17 +847,16 @@
                 try {
                     var emails = JSON.parse(text);
                     if (Array.isArray(emails) && emails[0] && emails[0].from) {
-                        bubble.innerHTML = '<div style="font-size:12px;color:#8888aa;margin-bottom:10px;">📧 ' + emails.length + ' email' + (emails.length === 1 ? '' : 's') + ' — click to open</div>';
-                        emails.forEach(function (em) {
+                        // Render email cards
+                        bubble.innerHTML = '<div style="font-size:12px;color:var(--fog);margin-bottom:8px">📧 ' + emails.length + ' emails found — click to read</div>';
+                        emails.forEach(function(email, i) {
                             var card = document.createElement("div");
-                            card.style.cssText = "padding:12px 14px;margin:6px 0;background:#12122a;border-radius:10px;cursor:pointer;border:1px solid #2a2a4a;transition:border-color 0.15s;";
-                            card.onmouseover = function () { card.style.borderColor = "#5555cc"; };
-                            card.onmouseout  = function () { card.style.borderColor = "#2a2a4a"; };
+                            card.style.cssText = "padding:10px 12px;margin:6px 0;background:var(--card);border-radius:8px;cursor:pointer;border:1px solid var(--border)";
                             card.innerHTML =
-                                '<div style="font-size:11px;color:#8888aa;margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">From: ' + em.from + '</div>' +
-                                '<div style="font-size:13px;color:#f0f0f0;font-weight:500;margin-bottom:4px;">' + (em.subject || "No subject") + '</div>' +
-                                '<div style="font-size:11px;color:#aaaacc;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + (em.preview || "") + '</div>';
-                            card.onclick = function () { openEmailModal(em); };
+                                '<div style="font-size:12px;color:var(--fog)">' + email.from + '</div>' +
+                                '<div style="font-size:13px;color:var(--snow);margin:2px 0">' + (email.subject || "No subject") + '</div>' +
+                                '<div style="font-size:11px;color:var(--fog)">' + (email.preview || "") + '</div>';
+                            card.onclick = function() { openEmailModal(email); };
                             bubble.appendChild(card);
                         });
                         div.innerHTML = avatar;
@@ -874,7 +865,7 @@
                         chat.scrollTop = chat.scrollHeight;
                         return;
                     }
-                } catch (e) { /* not JSON, render normally */ }
+                } catch(e) { /* not JSON, render normally */ }
             }
 
             bubble.textContent = text;
@@ -884,16 +875,15 @@
             chat.scrollTop = chat.scrollHeight;
         }
 
-        function openEmailModal(em) {
-            document.getElementById("emailModalSubject").textContent = em.subject || "No subject";
-            document.getElementById("emailModalFrom").textContent = "From: " + (em.from || "Unknown");
-            document.getElementById("emailModalBody").textContent = em.full || em.preview || "No content";
-            var modal = document.getElementById("emailModal");
-            modal.style.display = "flex";
+        function openEmailModal(email) {
+            document.getElementById("emailModalSubject").textContent = email.subject || "No subject";
+            document.getElementById("emailModalFrom").textContent = "From: " + email.from;
+            document.getElementById("emailModalBody").textContent = email.full || email.preview || "No content";
+            document.getElementById("emailModal").classList.add("open");
         }
 
         function closeEmailModal() {
-            document.getElementById("emailModal").style.display = "none";
+            document.getElementById("emailModal").classList.remove("open");
         }
 
         // Auto-resize textarea
