@@ -11,7 +11,7 @@ from collections import defaultdict
 import pdfplumber
 import numpy as np
 from dotenv import load_dotenv
-from groq import Groq
+from langchain_groq import ChatGroq
 from sklearn.metrics.pairwise import cosine_similarity
 from sentence_transformers import SentenceTransformer
 from sqlalchemy import create_engine, text
@@ -22,7 +22,19 @@ from config import DOCUMENTS_DIR, RAG_STORE, PDF_FILES
 
 load_dotenv()
 logger = logging.getLogger(__name__)
-groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+
+llm = ChatGroq(
+    model="llama-3.3-70b-versatile",
+    api_key=os.getenv("GROQ_API_KEY"),
+    temperature=0.0,
+    max_tokens=512,
+)
+rerank_llm = ChatGroq(
+    model="llama3-8b-8192",
+    api_key=os.getenv("GROQ_API_KEY"),
+    temperature=0,
+    max_tokens=20,
+)
 
 # Load model once
 print("Loading embedding model...")
@@ -295,16 +307,13 @@ def rerank_chunks(query: str, chunks: list) -> list:
     if len(chunks) <= 3:
         return chunks
     try:
-        res = groq_client.chat.completions.create(
-            model="llama3-8b-8192",
-            messages=[{"role": "user", "content":
+        res = rerank_llm.invoke([
+            {"role": "user", "content":
                 f"Query: {query}\n\nChunks:\n" +
                 "\n".join(f"[{i+1}] {c['text'][:300]}" for i, c in enumerate(chunks)) +
-                "\n\nReturn only 3 numbers comma-separated."}],
-            temperature=0,
-            max_tokens=20,
-        )
-        nums = re.findall(r"\d+", res.choices[0].message.content)
+                "\n\nReturn only 3 numbers comma-separated."}
+        ])
+        nums = re.findall(r"\d+", res.content)
         chosen = [chunks[int(n)-1] for n in nums[:3] if 0 < int(n) <= len(chunks)]
         return chosen or chunks[:3]
     except Exception:
@@ -319,28 +328,23 @@ def grounded_answer(query: str, chunks: list) -> str:
         f"[{i+1}] {c['source']} p{c.get('page','')}\n{c['text'][:1200]}"
         for i, c in enumerate(chunks)
     )
-    res = groq_client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
-        messages=[
-            {
-                "role": "system",
-                "content": """You are a helpful assistant for a power utility company.
+    res = llm.invoke([
+        {
+            "role": "system",
+            "content": """You are a helpful assistant for a power utility company.
 STRICT RULES:
 - Answer ONLY using the context provided
 - Copy exact values, numbers, specifications from context
 - Never make up information
 - If not in context say "Not found in the available manuals"
 - Be direct and specific"""
-            },
-            {
-                "role": "user",
-                "content": f"Context:\n{context}\n\nQuestion: {query}\n\nAnswer:"
-            }
-        ],
-        temperature=0.0,
-        max_tokens=512
-    )
-    return res.choices[0].message.content
+        },
+        {
+            "role": "user",
+            "content": f"Context:\n{context}\n\nQuestion: {query}\n\nAnswer:"
+        }
+    ])
+    return res.content
 
 
 # ── Main ──────────────────────────────────────
