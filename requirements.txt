@@ -1,4 +1,4 @@
-groq
+ÿþgroq
 fastapi
 uvicorn[standard]
 pandas
@@ -12,9 +12,11 @@ scikit-learn
 numpy
 voyageai
 langsmith
+langchain-groq
+langchain-core
 psycopg2-binary
 sqlalchemy
 sentence-transformers
 fastmcp
 redis
-httpx
+h

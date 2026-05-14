@@ -6,7 +6,7 @@ import pickle
 import logging
 import httpx
 from dotenv import load_dotenv
-from groq import Groq
+from langchain_groq import ChatGroq
 from sklearn.metrics.pairwise import cosine_similarity
 
 from langsmith import traceable, Client
@@ -58,9 +58,14 @@ async def call_mcp_tool(tool_name: str, arguments: dict = {}) -> str:
 
 load_dotenv()
 logger = logging.getLogger(__name__)
-groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
-MODEL             = "llama-3.3-70b-versatile"
+llm = ChatGroq(
+    model="llama-3.3-70b-versatile",
+    api_key=os.getenv("GROQ_API_KEY"),
+    temperature=0.1,
+    max_tokens=1024,
+)
+
 EMBEDDINGS_CACHE  = "data/agent_embeddings.pkl"
 
 TOOL_EMBEDDINGS: dict = {}
@@ -109,14 +114,11 @@ def rewrite_query(query: str, history: list) -> str:
         return query
     convo = "\n".join(f"{h['role']}: {h['content']}" for h in history[-6:])
     try:
-        res = groq_client.chat.completions.create(
-            model=MODEL,
-            messages=[{"role": "user", "content":
-                f"Rewrite as a standalone query resolving pronouns.\n\nHistory:\n{convo}\n\nRequest: {query}\n\nReturn only the rewritten query."}],
-            temperature=0,
-            max_tokens=100,
-        )
-        return res.choices[0].message.content.strip()
+        res = llm.bind(temperature=0, max_tokens=100).invoke([
+            {"role": "user", "content":
+                f"Rewrite as a standalone query resolving pronouns.\n\nHistory:\n{convo}\n\nRequest: {query}\n\nReturn only the rewritten query."}
+        ])
+        return res.content.strip()
     except Exception as e:
         logger.warning(f"Rewrite failed: {e}")
         return query
@@ -126,16 +128,13 @@ def rewrite_query(query: str, history: list) -> str:
 
 def parse_email_intent(query: str, context: str) -> dict:
     try:
-        res = groq_client.chat.completions.create(
-            model=MODEL,
-            messages=[{"role": "user", "content":
+        res = llm.bind(temperature=0.2, max_tokens=800).invoke([
+            {"role": "user", "content":
                 f"""Extract email details. Return ONLY valid JSON with keys: to_name, to_email, subject, body.
 Request: {query}
-Context: {context}"""}],
-            temperature=0.2,
-            max_tokens=800,
-        )
-        raw = re.sub(r"```json|```", "", res.choices[0].message.content).strip()
+Context: {context}"""}
+        ])
+        raw = re.sub(r"```json|```", "", res.content).strip()
         return json.loads(raw)
     except Exception as e:
         logger.warning(f"Email parse failed: {e}")
@@ -163,22 +162,11 @@ def summarise_web(query: str, results) -> str:
         return "No web results found."
 
     try:
-        res = groq_client.chat.completions.create(
-            model=MODEL,
-            messages=[
-                {
-                    "role": "system",
-                    "content": "Summarise in 3 bullet points. Only facts and prices. No URLs. No markdown links. Plain text only.",
-                },
-                {
-                    "role": "user",
-                    "content": f"Query: {query}\n\nData:\n{snippets}\n\nSummary:",
-                },
-            ],
-            temperature=0.0,
-            max_tokens=200,
-        )
-        return _strip_urls(res.choices[0].message.content)
+        res = llm.bind(temperature=0.0, max_tokens=200).invoke([
+            {"role": "system", "content": "Summarise in 3 bullet points. Only facts and prices. No URLs. No markdown links. Plain text only."},
+            {"role": "user", "content": f"Query: {query}\n\nData:\n{snippets}\n\nSummary:"},
+        ])
+        return _strip_urls(res.content)
     except Exception as e:
         return f"Web search error: {e}"
 
@@ -192,18 +180,13 @@ def llm_answer(query: str, chunks: list) -> str:
         for i, c in enumerate(chunks)
     )
     try:
-        res = groq_client.chat.completions.create(
-            model=MODEL,
-            messages=[
-                {"role": "system", "content":
-                    "You are OpsPilot AI for a power utility procurement team. "
-                    "Use only the provided data. Be concise and specific."},
-                {"role": "user", "content": f"Data:\n{context}\n\nQuestion: {query}"},
-            ],
-            temperature=0.1,
-            max_tokens=1024,
-        )
-        return res.choices[0].message.content
+        res = llm.invoke([
+            {"role": "system", "content":
+                "You are OpsPilot AI for a power utility procurement team. "
+                "Use only the provided data. Be concise and specific."},
+            {"role": "user", "content": f"Data:\n{context}\n\nQuestion: {query}"},
+        ])
+        return res.content
     except Exception as e:
         logger.error(f"LLM error: {e}")
         return "\n".join(f"• {c['text'][:200]}" for c in chunks[:5])
@@ -212,10 +195,11 @@ def llm_answer(query: str, chunks: list) -> str:
 # ── Main agent ────────────────────────────────────────────────────────────────
 
 ROUTE_TO_MCP: dict = {
-    "suppliers":        ("get_suppliers",  {}),
-    "alerts":           ("check_alerts",   {}),
-    "scan_email":       ("scan_inbox",     {}),
-    "search_documents": ("search_manuals", "query"),
+    "suppliers":        ("get_suppliers",        {}),
+    "alerts":           ("check_alerts",         {}),
+    "pending":          ("pending_requirements", {}),
+    "scan_email":       ("scan_inbox",           {}),
+    "search_documents": ("search_manuals",       "query"),
     # web_search handled separately — needs LLM summarization after MCP call
 }
 
