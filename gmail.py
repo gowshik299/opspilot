@@ -2,6 +2,8 @@
 # Gmail send + inbox scan
 
 import os
+import re
+import json
 import smtplib
 import imaplib
 import email
@@ -17,11 +19,29 @@ load_dotenv()
 SENDER_EMAIL = os.getenv("GMAIL", "")
 
 
-def clean_email_body(text: str) -> str:
-    import re
-    text = re.sub(r'<[^>]+>', ' ', text)
-    text = text.replace('&nbsp;', ' ').replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>').replace('&quot;', '"')
-    return re.sub(r'\s+', ' ', text).strip()
+def clean_email_body(body: str) -> str:
+    """Strip HTML tags and clean email body thoroughly"""
+    # Remove style and script blocks completely
+    body = re.sub(r'<style[^>]*>.*?</style>', '', body, flags=re.DOTALL)
+    body = re.sub(r'<script[^>]*>.*?</script>', '', body, flags=re.DOTALL)
+    # Remove HTML tags
+    body = re.sub(r'<[^>]+>', ' ', body)
+    # Decode HTML entities
+    body = body.replace('&nbsp;', ' ')
+    body = body.replace('&amp;', '&')
+    body = body.replace('&lt;', '<')
+    body = body.replace('&gt;', '>')
+    body = body.replace('&#39;', "'")
+    body = body.replace('&quot;', '"')
+    # Remove base64 chunks
+    body = re.sub(r'[A-Za-z0-9+/]{50,}={0,2}', '', body)
+    # Remove URLs
+    body = re.sub(r'https?://\S+', '', body)
+    # Remove email headers leaked into body
+    body = re.sub(r'(From|To|Subject|Date|MIME|Content):[^\n]*\n', '', body)
+    # Remove extra whitespace
+    body = re.sub(r'\s+', ' ', body).strip()
+    return body
 
 
 def setup_gmail(gmail: str, app_password: str) -> bool:
@@ -38,7 +58,7 @@ def setup_gmail(gmail: str, app_password: str) -> bool:
 
 
 def get_gmail_creds() -> tuple:
-    gmail       = get_credential("gmail") or SENDER_EMAIL
+    gmail        = get_credential("gmail") or SENDER_EMAIL
     app_password = get_credential("app_password")
     return gmail, app_password
 
@@ -86,17 +106,21 @@ def scan_inbox(last_n: int = 10) -> str:
         _, messages = mail.search(None, f'(SINCE "{since}")')
         ids = messages[0].split()[-last_n:]
         results = []
+
         for eid in ids:
             _, msg_data = mail.fetch(eid, "(RFC822)")
             msg = email.message_from_bytes(msg_data[0][1])
-            
+
             plain_body = ""
+
             if msg.is_multipart():
+                # First try plain text
                 for part in msg.walk():
                     if part.get_content_type() == "text/plain":
                         raw = part.get_payload(decode=True).decode(errors='ignore')
                         plain_body = clean_email_body(raw)
                         break
+                # Fallback to HTML
                 if not plain_body:
                     for part in msg.walk():
                         if part.get_content_type() == "text/html":
@@ -107,11 +131,15 @@ def scan_inbox(last_n: int = 10) -> str:
                 raw = msg.get_payload(decode=True).decode(errors='ignore')
                 plain_body = clean_email_body(raw)
 
+            # Clean subject (sometimes encoded)
+            subject = msg["subject"] or "No subject"
+            sender  = msg["from"] or "Unknown"
+
             results.append({
-                "from": msg["from"],
-                "subject": msg["subject"],
-                "preview": plain_body[:100],
-                "full": plain_body
+                "from":    sender,
+                "subject": subject,
+                "preview": plain_body[:120],
+                "full":    plain_body
             })
 
         mail.logout()
@@ -120,8 +148,6 @@ def scan_inbox(last_n: int = 10) -> str:
         if not results:
             return "No new emails found."
 
-        # Return as JSON string for frontend to parse
-        import json
         return json.dumps(results)
 
     except Exception as e:
