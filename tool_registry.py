@@ -31,11 +31,11 @@ TOOL_REGISTRY = {
         None,
     ),
     "email_supplier": (
-        "send email contact supplier notify vendor email price quote request write mail",
+        "send email write email compose email draft email to supplier vendor contact notify",
         None,
     ),
     "scan_email": (
-        "check gmail inbox scan inbox supplier email replies received messages unread emails check mail inbox",
+        "check inbox scan inbox read inbox received emails unread messages supplier replies check gmail any replies any emails",
         None,
     ),
     "general": (
