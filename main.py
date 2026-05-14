@@ -264,6 +264,10 @@ def gmail_setup(req: GmailSetupRequest):
 @app.get("/rebuild-index")
 async def rebuild_index_route():
     try:
+        # Delete routing embeddings cache
+        if os.path.exists("data/agent_embeddings.pkl"):
+            os.remove("data/agent_embeddings.pkl")
+        # Rebuild RAG index
         from rag import rebuild_index
         rebuild_index()
         return {"status": "Index rebuilt successfully"}
