@@ -81,21 +81,41 @@ def scan_inbox(last_n: int = 10) -> str:
         results = []
         for eid in ids:
             _, msg_data = mail.fetch(eid, "(RFC822)")
-            msg  = email.message_from_bytes(msg_data[0][1])
-            body = ""
+            msg = email.message_from_bytes(msg_data[0][1])
+            
+            plain_body = ""
             if msg.is_multipart():
                 for part in msg.walk():
                     if part.get_content_type() == "text/plain":
-                        body = part.get_payload(decode=True).decode()[:500]
+                        raw = part.get_payload(decode=True).decode(errors='ignore')
+                        plain_body = clean_email_body(raw)
                         break
+                if not plain_body:
+                    for part in msg.walk():
+                        if part.get_content_type() == "text/html":
+                            raw = part.get_payload(decode=True).decode(errors='ignore')
+                            plain_body = clean_email_body(raw)
+                            break
             else:
-                body = msg.get_payload(decode=True).decode()[:500]
-            results.append({"from": msg["from"], "subject": msg["subject"], "preview": body})
+                raw = msg.get_payload(decode=True).decode(errors='ignore')
+                plain_body = clean_email_body(raw)
+
+            results.append({
+                "from": msg["from"],
+                "subject": msg["subject"],
+                "preview": plain_body[:100],
+                "full": plain_body
+            })
+
         mail.logout()
         save_credential("last_scanned", datetime.now().isoformat())
+
         if not results:
             return "No new emails found."
-        return "\n\n".join(f"{i+1}. From: {r['from']}\nSubject: {r['subject']}\n{r['preview'][:200]}"
-                           for i, r in enumerate(results))
+
+        # Return as JSON string for frontend to parse
+        import json
+        return json.dumps(results)
+
     except Exception as e:
         return f"❌ Scan failed: {e}"

@@ -828,13 +828,52 @@
             var avatar = role === "user"
                 ? '<div class="msg-ava">' + (appState.currentUser ? appState.currentUser.name[0].toUpperCase() : "U") + '</div>'
                 : '<div class="msg-ava">⚡</div>';
+
             var bubble = document.createElement("div");
             bubble.className = "chat-bubble";
+
+            // Try to parse as email JSON
+            if (role === "ai") {
+                try {
+                    var emails = JSON.parse(text);
+                    if (Array.isArray(emails) && emails[0] && emails[0].from) {
+                        // Render email cards
+                        bubble.innerHTML = '<div style="font-size:12px;color:var(--fog);margin-bottom:8px">📧 ' + emails.length + ' emails found — click to read</div>';
+                        emails.forEach(function (email, i) {
+                            var card = document.createElement("div");
+                            card.style.cssText = "padding:10px 12px;margin:6px 0;background:var(--card);border-radius:8px;cursor:pointer;border:1px solid var(--border)";
+                            card.innerHTML =
+                                '<div style="font-size:12px;color:var(--fog)">' + email.from + '</div>' +
+                                '<div style="font-size:13px;color:var(--snow);margin:2px 0">' + (email.subject || "No subject") + '</div>' +
+                                '<div style="font-size:11px;color:var(--fog)">' + (email.preview || "") + '</div>';
+                            card.onclick = function () { openEmailModal(email); };
+                            bubble.appendChild(card);
+                        });
+                        div.innerHTML = avatar;
+                        div.appendChild(bubble);
+                        chat.appendChild(div);
+                        chat.scrollTop = chat.scrollHeight;
+                        return;
+                    }
+                } catch (e) { /* not JSON, render normally */ }
+            }
+
             bubble.textContent = text;
             div.innerHTML = avatar;
             div.appendChild(bubble);
             chat.appendChild(div);
             chat.scrollTop = chat.scrollHeight;
+        }
+
+        function openEmailModal(email) {
+            document.getElementById("emailModalSubject").textContent = email.subject || "No subject";
+            document.getElementById("emailModalFrom").textContent = "From: " + email.from;
+            document.getElementById("emailModalBody").textContent = email.full || email.preview || "No content";
+            document.getElementById("emailModal").classList.add("open");
+        }
+
+        function closeEmailModal() {
+            document.getElementById("emailModal").classList.remove("open");
         }
 
         // Auto-resize textarea
@@ -904,7 +943,15 @@
             if (p === "alerts") { loadAlerts(); return; }
             updateDashboardStats();
         }
-
+        <!-- EMAIL MODAL -->
+        <div class="modal-bg" id="emailModal" onclick="if(event.target===this)closeEmailModal()">
+            <div class="modal-box" style="max-width:600px">
+                <button class="modal-close" onclick="closeEmailModal()">✕</button>
+                <div class="modal-title" id="emailModalSubject">Email</div>
+                <div class="modal-sub" id="emailModalFrom"></div>
+                <div style="margin-top:16px;padding:16px;background:var(--card);border-radius:8px;white-space:pre-wrap;font-size:13px;line-height:1.6;color:var(--snow)" id="emailModalBody"></div>
+            </div>
+        </div>
         /* ══════════════════════════════════════════
            TOASTS
         ══════════════════════════════════════════ */
