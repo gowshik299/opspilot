@@ -1,12 +1,10 @@
-# auth.py
 import os
 from datetime import datetime, timedelta
 from typing import Optional
-import json
 
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from fastapi import HTTPException, Security, status
+from fastapi import HTTPException, Security
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy import text
 
@@ -14,6 +12,9 @@ from memory import engine
 from cache import r, REDIS_AVAILABLE
 
 # Config
+import os
+
+
 SECRET_KEY = os.getenv("JWT_SECRET", "opspilot-secret-key-change-in-production")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_HOURS = 24
