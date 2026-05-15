@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>OpsPilot — Procurement Intelligence</title>
+    <title>OpsPilot — Procurement </title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link
         href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Fraunces:opsz,wght@9..144,300;9..144,600;9..144,700&display=swap"
@@ -15,31 +15,58 @@
 <body>
 
     <!-- ══════════════════════════ LOGIN ══════════════════════════ -->
-    <div id="loginScreen">
-        <div class="login-card">
-            <div class="login-logo">
-                <div class="logo-icon">⚡</div>
-                <div>
-                    <div class="logo-name">OpsPilot</div>
-                    <span class="logo-tag">Procurement Intelligence</span>
-                </div>
+<!-- ══════════════════════════ LOGIN ══════════════════════════ -->
+<div id="loginScreen">
+    <div class="login-card">
+        <div class="login-logo">
+            <div class="logo-icon">⚡</div>
+            <div>
+                <div class="logo-name">OpsPilot</div>
+                <span class="logo-tag">Procurement Intelligence</span>
             </div>
-            <div class="login-heading">Welcome back</div>
-            <div class="login-sub">Sign in to access your procurement dashboard</div>
+        </div>
+        <div class="login-heading">Welcome back</div>
+        <div class="login-sub">Sign in to access your procurement dashboard</div>
 
+        <!-- Login Form -->
+        <div id="loginForm">
             <div class="field">
-                <label for="loginName">Full Name</label>
-                <input id="loginName" type="text" placeholder="e.g. Gowshik Kumar" autocomplete="off" />
+                <label for="loginUsername">Username</label>
+                <input id="loginUsername" type="text" placeholder="e.g. gowshik" autocomplete="off" />
             </div>
             <div class="field">
-                <label for="loginId">Employee ID</label>
-                <input id="loginId" type="text" placeholder="e.g. EMP-001" autocomplete="off" />
+                <label for="loginPassword">Password</label>
+                <input id="loginPassword" type="password" placeholder="Your password" />
             </div>
+            <button class="login-btn" onclick="doLogin()">Sign In →</button>
+            <div id="loginErr" class="login-err hidden">Invalid username or password.</div>
+            <div style="text-align:center;margin-top:12px;font-size:12px;color:var(--fog)">
+                Don't have an account? <span style="color:var(--accent);cursor:pointer" onclick="showRegister()">Register</span>
+            </div>
+        </div>
 
-            <button class="login-btn" onclick="doLogin()">Enter Dashboard →</button>
-            <div id="loginErr" class="login-err hidden">Please enter your name and employee ID.</div>
+        <!-- Register Form -->
+        <div id="registerForm" style="display:none">
+            <div class="field">
+                <label>Username</label>
+                <input id="regUsername" type="text" placeholder="Choose a username" />
+            </div>
+            <div class="field">
+                <label>Email</label>
+                <input id="regEmail" type="email" placeholder="your@email.com" />
+            </div>
+            <div class="field">
+                <label>Password</label>
+                <input id="regPassword" type="password" placeholder="Choose a password" />
+            </div>
+            <button class="login-btn" onclick="doRegister()">Create Account →</button>
+            <div id="registerErr" class="login-err hidden">Registration failed.</div>
+            <div style="text-align:center;margin-top:12px;font-size:12px;color:var(--fog)">
+                Already have an account? <span style="color:var(--accent);cursor:pointer" onclick="showLogin()">Sign In</span>
+            </div>
         </div>
     </div>
+</div>
 
     <!-- ══════════════════════════ APP ══════════════════════════ -->
     <div id="appShell">
@@ -381,40 +408,101 @@
         /* ══════════════════════════════════════════
            LOGIN / LOGOUT
         ══════════════════════════════════════════ */
-        function doLogin() {
-            var name = document.getElementById("loginName").value.trim();
-            var id = document.getElementById("loginId").value.trim();
-            if (!name || !id) {
+        function showRegister() {
+            document.getElementById("loginForm").style.display = "none";
+            document.getElementById("registerForm").style.display = "block";
+        }
+
+        function showLogin() {
+            document.getElementById("registerForm").style.display = "none";
+            document.getElementById("loginForm").style.display = "block";
+        }
+
+        async function doLogin() {
+            var username = document.getElementById("loginUsername").value.trim();
+            var password = document.getElementById("loginPassword").value.trim();
+
+            if (!username || !password) {
                 document.getElementById("loginErr").classList.remove("hidden");
+                document.getElementById("loginErr").textContent = "Please enter username and password.";
                 return;
             }
 
-            appState.currentUser = { name: name, id: id };
+            try {
+                var res = await fetch("/login", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ username: username, password: password })
+                });
+                var data = await res.json();
 
-            // Update sidebar
-            document.getElementById("ubName").textContent = name;
-            document.getElementById("ubAvatar").textContent = name[0].toUpperCase();
+                if (res.ok && data.access_token) {
+                    localStorage.setItem("opspilot_token", data.access_token);
+                    localStorage.setItem("opspilot_user", username);
+                    localStorage.setItem("opspilot_role", data.role);
 
-            // Update chat greeting
-            document.getElementById("chatGreetName").textContent = "Hey, " + name.split(" ")[0] + " 👋";
+                    appState.currentUser = {
+                        name: username,
+                        role: data.role,
+                        token: data.access_token
+                    };
 
-            // Update hero
-            var h = new Date().getHours();
-            var greeting = h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
-            document.getElementById("heroGreet").textContent = greeting + ", " + name.split(" ")[0] + " ⚡";
+                    document.getElementById("ubName").textContent = username;
+                    document.getElementById("ubAvatar").textContent = username[0].toUpperCase();
+                    document.getElementById("chatGreetName").textContent = "Hey, " + username + " 👋";
 
-            // Animate out login
-            var ls = document.getElementById("loginScreen");
-            ls.classList.add("out");
-            setTimeout(function () { ls.style.display = "none"; }, 580);
+                    var h = new Date().getHours();
+                    var greeting = h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
+                    document.getElementById("heroGreet").textContent = greeting + ", " + username + " ⚡";
 
-            // Animate in app
-            var app = document.getElementById("appShell");
-            app.classList.add("live");
+                    var ls = document.getElementById("loginScreen");
+                    ls.classList.add("out");
+                    setTimeout(function () { ls.style.display = "none"; }, 580);
+                    document.getElementById("appShell").classList.add("live");
 
-            // Bootstrap data
-            bootstrap();
-            checkHealth();
+                    bootstrap();
+                    checkHealth();
+                } else {
+                    document.getElementById("loginErr").classList.remove("hidden");
+                    document.getElementById("loginErr").textContent = data.detail || "Invalid credentials.";
+                }
+            } catch (e) {
+                document.getElementById("loginErr").classList.remove("hidden");
+                document.getElementById("loginErr").textContent = "Connection error. Try again.";
+            }
+        }
+
+        async function doRegister() {
+            var username = document.getElementById("regUsername").value.trim();
+            var email = document.getElementById("regEmail").value.trim();
+            var password = document.getElementById("regPassword").value.trim();
+
+            if (!username || !email || !password) {
+                document.getElementById("registerErr").classList.remove("hidden");
+                document.getElementById("registerErr").textContent = "Please fill all fields.";
+                return;
+            }
+
+            try {
+                var res = await fetch("/register", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ username: username, email: email, password: password, role: "viewer" })
+                });
+                var data = await res.json();
+
+                if (res.ok) {
+                    toast("Account created! Please sign in.", "ok");
+                    showLogin();
+                    document.getElementById("loginUsername").value = username;
+                } else {
+                    document.getElementById("registerErr").classList.remove("hidden");
+                    document.getElementById("registerErr").textContent = data.detail || "Registration failed.";
+                }
+            } catch (e) {
+                document.getElementById("registerErr").classList.remove("hidden");
+                document.getElementById("registerErr").textContent = "Connection error. Try again.";
+            }
         }
 
         document.addEventListener("keydown", function (e) {
@@ -424,15 +512,19 @@
         });
 
         function doLogout() {
+            localStorage.removeItem("opspilot_token");
+            localStorage.removeItem("opspilot_user");
+            localStorage.removeItem("opspilot_role");
             appState.currentUser = null;
             var ls = document.getElementById("loginScreen");
             ls.style.display = "flex";
             ls.classList.remove("out");
             document.getElementById("appShell").classList.remove("live");
-            document.getElementById("loginName").value = "";
-            document.getElementById("loginId").value = "";
+            document.getElementById("loginUsername").value = "";
+            document.getElementById("loginPassword").value = "";
             document.getElementById("loginErr").classList.add("hidden");
             document.getElementById("chatBox").innerHTML = buildWelcomeHtml();
+            showLogin();
         }
 
         /* ══════════════════════════════════════════
@@ -809,7 +901,10 @@
             try {
                 var res = await fetch("/chat", {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": "Bearer " + (appState.currentUser ? appState.currentUser.token : "")
+                    },
                     body: JSON.stringify({
                         user_name: appState.currentUser ? appState.currentUser.name : "user",
                         message: text
@@ -899,6 +994,24 @@
             }
             var si = document.getElementById("supplierSearch");
             if (si) si.addEventListener("input", searchSuppliers);
+
+            // Auto-login if token exists
+            var token = localStorage.getItem("opspilot_token");
+            var username = localStorage.getItem("opspilot_user");
+            var role = localStorage.getItem("opspilot_role");
+
+            if (token && username) {
+                appState.currentUser = { name: username, role: role, token: token };
+                document.getElementById("ubName").textContent = username;
+                document.getElementById("ubAvatar").textContent = username[0].toUpperCase();
+                document.getElementById("chatGreetName").textContent = "Hey, " + username + " 👋";
+
+                var ls = document.getElementById("loginScreen");
+                ls.style.display = "none";
+                document.getElementById("appShell").classList.add("live");
+                bootstrap();
+                checkHealth();
+            }
         });
 
         /* ══════════════════════════════════════════
