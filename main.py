@@ -3,12 +3,11 @@ import os
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 load_dotenv()
-
+from fastapi import FastAPI, HTTPException, UploadFile, File, Depends
+from auth import get_current_user, create_user, create_token, verify_password, get_user
 os.environ["LANGCHAIN_TRACING_V2"]  = os.getenv("LANGCHAIN_TRACING_V2", "false")
 os.environ["LANGCHAIN_API_KEY"]      = os.getenv("LANGSMITH_API_KEY", "")
 os.environ["LANGCHAIN_PROJECT"]      = os.getenv("LANGSMITH_PROJECT", "opspilot")
-
-import pandas as pd
 
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,8 +19,8 @@ from fastmcp import FastMCP
 from agent import run_agent
 from tools import check_alerts
 from gmail import setup_gmail, get_gmail_creds
-from memory import save_invoice, get_invoices, get_spend_summary
-from config import EXCEL_FILE, UPLOADS_DIR
+from memory import save_invoice, get_invoices
+from config import UPLOADS_DIR
 
 
 # ── MCP server (defined before app) ──────────────────────────────────────────
@@ -118,6 +117,16 @@ class GmailSetupRequest(BaseModel):
     gmail: str
     app_password: str
 
+class RegisterRequest(BaseModel):
+    username: str
+    email: str
+    password: str
+    role: str = "viewer"
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
 
 # ── Pages ─────────────────────────────────────────────────────────────────────
 
@@ -144,6 +153,33 @@ async def health():
     }
 
 
+# ── Auth ──────────────────────────────────────────────────────────────────────
+
+@app.post("/register")
+def register(req: RegisterRequest):
+    try:
+        ok = create_user(req.username, req.email, req.password, req.role)
+        if ok:
+            return {"status": "registered", "username": req.username}
+        raise HTTPException(status_code=400, detail="Username or email already exists")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/login")
+def login(req: LoginRequest):
+    user = get_user(req.username)
+    if not user or not verify_password(req.password, user["hashed_password"]):
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+    token = create_token({"sub": user["username"], "role": user["role"]})
+    return {"access_token": token, "token_type": "bearer", "role": user["role"]}
+
+@app.post("/logout")
+def logout(_=Depends(get_current_user)):
+    return {"status": "logged out"}
+
+
 # ── Chat ──────────────────────────────────────────────────────────────────────
 
 @app.post("/chat")
@@ -160,8 +196,9 @@ async def chat(req: ChatRequest):
 @app.get("/suppliers")
 def get_suppliers():
     try:
-        df = pd.read_excel(EXCEL_FILE, sheet_name="Suppliers")
-        return df.fillna("").to_dict(orient="records")
+        from tools import query_db
+        rows = query_db("SELECT supplier_name, city, category, contact_email, phone FROM suppliers")
+        return rows
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -212,18 +249,33 @@ async def upload_invoice(file: UploadFile = File(...)):
 @app.get("/reports")
 def get_reports():
     try:
-        data = get_spend_summary()
-        try:
-            df = pd.read_excel(EXCEL_FILE, sheet_name="Procurement_History")
-            by_cat = (
-                df.groupby("Category")["Total_Price_INR"]
-                .sum().sort_values(ascending=False).head(5)
-            )
-            breakdown = "\n".join(f"• {cat}: ₹{int(val):,}" for cat, val in by_cat.items())
-        except Exception:
-            breakdown = "No procurement history available."
-        data["category_breakdown"] = breakdown
-        return data
+        from tools import query_db
+        total_rows = query_db("SELECT SUM(total_price_inr) as total, COUNT(*) as orders FROM procurement_history")
+        total = int(total_rows[0]['total'] or 0) if total_rows else 0
+        orders = int(total_rows[0]['orders'] or 0) if total_rows else 0
+
+        top_rows = query_db("""
+            SELECT supplier, COUNT(*) as cnt
+            FROM procurement_history
+            GROUP BY supplier
+            ORDER BY cnt DESC LIMIT 1
+        """)
+        top_supplier = top_rows[0]['supplier'] if top_rows else "—"
+
+        cat_rows = query_db("""
+            SELECT category, SUM(total_price_inr) as total
+            FROM procurement_history
+            GROUP BY category
+            ORDER BY total DESC LIMIT 5
+        """)
+        breakdown = "\n".join(f"• {r['category']}: ₹{int(r['total']):,}" for r in cat_rows)
+
+        return {
+            "total_spend": total,
+            "total_orders": orders,
+            "top_supplier": top_supplier,
+            "category_breakdown": breakdown or "No data available."
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
