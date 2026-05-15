@@ -10,7 +10,7 @@ from fastapi import HTTPException, Security, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy import text
 
-from memory import get_db
+from memory import engine
 from cache import r, REDIS_AVAILABLE
 
 # Config
@@ -49,7 +49,7 @@ def decode_token(token: str) -> dict:
 # ── Database utils ────────────────────────────────
 
 def get_user(username: str) -> Optional[dict]:
-    with get_db() as conn:
+    with engine.connect() as conn:
         result = conn.execute(
             text("SELECT * FROM users WHERE username = :u AND is_active = TRUE"),
             {"u": username}
@@ -60,7 +60,7 @@ def get_user(username: str) -> Optional[dict]:
 
 def create_user(username: str, email: str, password: str, role: str = "viewer") -> bool:
     try:
-        with get_db() as conn:
+        with engine.connect() as conn:
             conn.execute(text("""
                 INSERT INTO users (username, email, hashed_password, role)
                 VALUES (:u, :e, :p, :r)
