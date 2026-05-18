@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 load_dotenv()
 from fastapi import FastAPI, HTTPException, UploadFile, File, Depends
-from auth import get_current_user, create_user, create_token, verify_password, get_user
+from auth import get_current_user, require_admin, create_user, create_token, verify_password, get_user, blacklist_token
 os.environ["LANGCHAIN_TRACING_V2"]  = os.getenv("LANGCHAIN_TRACING_V2", "false")
 os.environ["LANGCHAIN_API_KEY"]      = os.getenv("LANGSMITH_API_KEY", "")
 os.environ["LANGCHAIN_PROJECT"]      = os.getenv("LANGSMITH_PROJECT", "opspilot")
@@ -183,7 +183,7 @@ def logout(_=Depends(get_current_user)):
 # ── Chat ──────────────────────────────────────────────────────────────────────
 
 @app.post("/chat")
-async def chat(req: ChatRequest):
+async def chat(req: ChatRequest, _=Depends(get_current_user)):
     try:
         response = await run_agent(req.user_name, req.message)
         return {"response": response, "user": req.user_name}
@@ -194,7 +194,7 @@ async def chat(req: ChatRequest):
 # ── Suppliers ─────────────────────────────────────────────────────────────────
 
 @app.get("/suppliers")
-def get_suppliers():
+def get_suppliers(_=Depends(get_current_user)):
     try:
         from tools import query_db
         rows = query_db("SELECT supplier_name, city, category, contact_email, phone FROM suppliers")
@@ -206,7 +206,7 @@ def get_suppliers():
 # ── Invoices ──────────────────────────────────────────────────────────────────
 
 @app.get("/invoices")
-def list_invoices():
+def list_invoices(_=Depends(get_current_user)):
     try:
         return get_invoices()
     except Exception as e:
@@ -214,7 +214,7 @@ def list_invoices():
 
 
 @app.post("/upload-invoice")
-async def upload_invoice(file: UploadFile = File(...)):
+async def upload_invoice(file: UploadFile = File(...), _=Depends(get_current_user)):
     try:
         os.makedirs(UPLOADS_DIR, exist_ok=True)
         path = os.path.join(UPLOADS_DIR, file.filename)
@@ -247,7 +247,7 @@ async def upload_invoice(file: UploadFile = File(...)):
 # ── Reports ───────────────────────────────────────────────────────────────────
 
 @app.get("/reports")
-def get_reports():
+def get_reports(_=Depends(get_current_user)):
     try:
         from tools import query_db
         total_rows = query_db("SELECT SUM(total_price_inr) as total, COUNT(*) as orders FROM procurement_history")
@@ -283,7 +283,7 @@ def get_reports():
 # ── Alerts ────────────────────────────────────────────────────────────────────
 
 @app.get("/alerts")
-def get_alerts():
+def get_alerts(_=Depends(get_current_user)):
     try:
         raw = check_alerts()
         if isinstance(raw, str):
@@ -299,7 +299,7 @@ def get_alerts():
 # ── Gmail ─────────────────────────────────────────────────────────────────────
 
 @app.post("/gmail-setup")
-def gmail_setup(req: GmailSetupRequest):
+def gmail_setup(req: GmailSetupRequest, _=Depends(get_current_user)):
     try:
         ok = setup_gmail(req.gmail, req.app_password)
         if ok:
@@ -314,7 +314,7 @@ def gmail_setup(req: GmailSetupRequest):
 # ── Admin ─────────────────────────────────────────────────────────────────────
 
 @app.get("/rebuild-index")
-async def rebuild_index_route():
+async def rebuild_index_route(_=Depends(require_admin)):
     try:
         # Delete routing embeddings cache
         if os.path.exists("data/agent_embeddings.pkl"):
@@ -327,7 +327,7 @@ async def rebuild_index_route():
         return {"error": str(e)}
 
 @app.post("/rag/rebuild")
-def rag_rebuild():
+def rag_rebuild(_=Depends(require_admin)):
     try:
         from rag import rebuild_index
         rebuild_index()
