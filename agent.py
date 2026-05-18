@@ -211,62 +211,78 @@ ROUTE_TO_MCP: dict = {
 }
 
 
-@traceable(name="OpsPilot Agent", run_type="chain")
 async def run_agent(user_name: str, message: str) -> str:
-    cached = get_cached(message)
-    if cached:
-        return cached
+    try:
+        cached = get_cached(message)
+        if cached:
+            return cached
 
-    save_message(user_name, "user", message)
-    history      = get_history(user_name)
-    search_query = rewrite_query(message, history)
-    route        = route_query(search_query)
+        save_message(user_name, "user", message)
+        history      = get_history(user_name)
+        search_query = rewrite_query(message, history)
+        route        = route_query(search_query)
 
-    # MCP-routed tools
-    if route in ROUTE_TO_MCP:
-        tool_name, arg = ROUTE_TO_MCP[route]
-        arguments = {arg: search_query} if isinstance(arg, str) else {}
-        result = await call_mcp_tool(tool_name, arguments)
+        # MCP-routed tools
+        if route in ROUTE_TO_MCP:
+            tool_name, arg = ROUTE_TO_MCP[route]
+            arguments = {arg: search_query} if isinstance(arg, str) else {}
+            try:
+                result = await call_mcp_tool(tool_name, arguments)
+                if not result or result == "No result from MCP":
+                    result = "I couldn't fetch that data right now. Please try again."
+            except Exception as e:
+                logger.error(f"MCP tool error [{tool_name}]: {e}")
+                result = "I couldn't fetch that data right now. Please try again."
 
-    # Web search: call via MCP then summarise with LLM
-    elif route == "web_search":
-        raw = await call_mcp_tool("web_search", {"query": search_query})
-        result = summarise_web(search_query, raw)
+        elif route == "web_search":
+            try:
+                raw = await call_mcp_tool("web_search", {"query": search_query})
+                result = summarise_web(search_query, raw)
+            except Exception:
+                result = "Web search is temporarily unavailable. Please try again."
 
-    # Procurement / general: retrieve from Excel then answer with LLM
-    elif route in ("procurement", "general"):
-        from retrieval import retrieve
-        chunks = retrieve(search_query)
-        result = llm_answer(search_query, chunks) if chunks else "No relevant data found. Please rephrase your question."
+        elif route in ("procurement", "general"):
+            try:
+                from retrieval import retrieve
+                chunks = retrieve(search_query)
+                result = llm_answer(search_query, chunks) if chunks else "No relevant data found. Please rephrase your question."
+            except Exception:
+                result = "I couldn't process that request. Please try rephrasing."
 
-    # Email: parse intent then send via MCP
-    elif route == "email_supplier":
-        from retrieval import retrieve
-        chunks  = retrieve(search_query)
-        context = "\n".join(c["text"] for c in chunks[:5])
-        data    = parse_email_intent(search_query, context)
-        to_email = data.get("to_email", "")
-        if not data or not to_email or to_email == "unknown":
-            result = "Couldn't find supplier email. Please specify the supplier name."
+        elif route == "email_supplier":
+            try:
+                from retrieval import retrieve
+                chunks  = retrieve(search_query)
+                context = "\n".join(c["text"] for c in chunks[:5])
+                data    = parse_email_intent(search_query, context)
+                to_email = data.get("to_email", "")
+                if not data or not to_email or to_email == "unknown":
+                    result = "Couldn't find supplier email. Please specify the supplier name."
+                else:
+                    status = await call_mcp_tool("send_supplier_email", {
+                        "to_email": to_email,
+                        "to_name":  data.get("to_name", ""),
+                        "subject":  data.get("subject", ""),
+                        "body":     data.get("body", ""),
+                    })
+                    result = (
+                        f"{status}\n\n"
+                        f"To: {data.get('to_name')} ({to_email})\n"
+                        f"Subject: {data.get('subject')}\n\n"
+                        f"{data.get('body', '')[:400]}…"
+                    )
+            except Exception:
+                result = "Failed to send email. Please check Gmail is connected."
+
         else:
-            status = await call_mcp_tool("send_supplier_email", {
-                "to_email": to_email,
-                "to_name":  data.get("to_name", ""),
-                "subject":  data.get("subject", ""),
-                "body":     data.get("body", ""),
-            })
-            result = (
-                f"{status}\n\n"
-                f"To: {data.get('to_name')} ({to_email})\n"
-                f"Subject: {data.get('subject')}\n\n"
-                f"{data.get('body', '')[:400]}…"
-            )
+            result = "I couldn't understand that request. Please try rephrasing."
 
-    else:
-        result = "I couldn't understand that request. Please try rephrasing."
+        if route in ("procurement", "alerts", "search_documents"):
+            set_cached(message, result, ttl=300)
 
-    if route in ("procurement", "alerts", "search_documents"):
-        set_cached(message, result, ttl=300)
+        save_message(user_name, "assistant", result)
+        return result
 
-    save_message(user_name, "assistant", result)
-    return result
+    except Exception as e:
+        logger.error(f"Agent error: {e}")
+        return "Something went wrong. Please try again in a moment."

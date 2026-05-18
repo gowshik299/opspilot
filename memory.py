@@ -54,6 +54,17 @@ def init_db():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """))
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                username TEXT UNIQUE NOT NULL,
+                email TEXT UNIQUE NOT NULL,
+                hashed_password TEXT NOT NULL,
+                role TEXT DEFAULT 'viewer',
+                is_active BOOLEAN DEFAULT TRUE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """))
         conn.commit()
     print("✅ PostgreSQL connected and tables ready!")
 

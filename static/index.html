@@ -710,7 +710,7 @@
             var c = document.getElementById("supplierResults");
             c.innerHTML = '<div class="loading-row"></div><div class="loading-row" style="width:70%"></div>';
             try {
-                var res = await fetch("/suppliers");
+                var res = await fetch("/suppliers", { headers: { "Authorization": "Bearer " + (appState.currentUser ? appState.currentUser.token : "") } });
                 var data = await res.json();
                 appState.suppliers = Array.isArray(data) ? data : [];
                 searchSuppliers();
@@ -737,7 +737,7 @@
             if (!c) return;
             c.innerHTML = '<div class="loading-row" style="margin:12px"></div>';
             try {
-                var res = await fetch("/invoices");
+                var res = await fetch("/invoices", { headers: { "Authorization": "Bearer " + (appState.currentUser ? appState.currentUser.token : "") } });
                 var data = await res.json();
                 appState.invoices = Array.isArray(data) ? data : [];
                 c.innerHTML = "";
@@ -766,7 +766,7 @@
             var form = new FormData();
             form.append("file", file);
             try {
-                var res = await fetch("/upload-invoice", { method: "POST", body: form });
+                var res = await fetch("/upload-invoice", { method: "POST", body: form, headers: { "Authorization": "Bearer " + (appState.currentUser ? appState.currentUser.token : "") } });
                 var data = await res.json();
                 toast("Uploaded: " + safeText((data.parsed && data.parsed.vendor_name) || file.name), "ok");
                 await loadInvoices();
@@ -779,7 +779,7 @@
         ══════════════════════════════════════════ */
         async function loadReports() {
             try {
-                var res = await fetch("/reports");
+                var res = await fetch("/reports", { headers: { "Authorization": "Bearer " + (appState.currentUser ? appState.currentUser.token : "") } });
                 var data = await res.json();
                 appState.reports = data;
                 var fmt = function (n) { return "₹" + Number(n || 0).toLocaleString("en-IN"); };
@@ -802,7 +802,7 @@
             if (!c) return;
             c.innerHTML = '<div class="loading-row" style="margin:12px"></div>';
             try {
-                var res = await fetch("/alerts");
+                var res = await fetch("/alerts", { headers: { "Authorization": "Bearer " + (appState.currentUser ? appState.currentUser.token : "") } });
                 var data = await res.json();
                 var alerts = data.alerts || [];
                 appState.alerts = alerts;
