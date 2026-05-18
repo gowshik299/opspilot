@@ -3,8 +3,10 @@ import os
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 load_dotenv()
-from fastapi import FastAPI, HTTPException, UploadFile, File, Depends
+import asyncio
+from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, WebSocket, WebSocketDisconnect
 from auth import get_current_user, require_admin, create_user, create_token, verify_password, get_user, blacklist_token
+from scheduler import start_scheduler, stop_scheduler, get_notifications
 os.environ["LANGCHAIN_TRACING_V2"]  = os.getenv("LANGCHAIN_TRACING_V2", "false")
 os.environ["LANGCHAIN_API_KEY"]      = os.getenv("LANGSMITH_API_KEY", "")
 os.environ["LANGCHAIN_PROJECT"]      = os.getenv("LANGSMITH_PROJECT", "opspilot")
@@ -88,8 +90,10 @@ mcp_app = mcp.http_app(path="/")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    start_scheduler()
     async with mcp_app.router.lifespan_context(app):
         yield
+    stop_scheduler()
 
 
 # ── FastAPI app ───────────────────────────────────────────────────────────────
@@ -405,6 +409,21 @@ async def test_mcp():
                 result_lines.append(line)
 
     return {"session_id": session_id, "init": init_lines, "result": result_lines}
+
+
+# ── WebSocket ─────────────────────────────────────────────────────────────────
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    try:
+        while True:
+            await asyncio.sleep(5)
+            notifications = get_notifications()
+            if notifications:
+                await websocket.send_json({"notifications": notifications})
+    except WebSocketDisconnect:
+        pass
 
 
 # ── Mount MCP ─────────────────────────────────────────────────────────────────

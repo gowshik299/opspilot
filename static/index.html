@@ -462,6 +462,7 @@
 
                     bootstrap();
                     checkHealth();
+                    connectWebSocket();
                 } else {
                     document.getElementById("loginErr").classList.remove("hidden");
                     document.getElementById("loginErr").textContent = data.detail || "Invalid credentials.";
@@ -1085,6 +1086,47 @@
         function setText(id, val) {
             var el = document.getElementById(id);
             if (el) el.textContent = val;
+        }
+
+        /* ══════════════════════════════════════════
+           WEBSOCKET
+        ══════════════════════════════════════════ */
+        function connectWebSocket() {
+            var wsUrl = "wss://opspilot-162649919209.asia-south2.run.app/ws";
+            var ws = new WebSocket(wsUrl);
+
+            ws.onmessage = function(event) {
+                var data = JSON.parse(event.data);
+                if (data.notifications) {
+                    data.notifications.forEach(function(notif) {
+                        toast("🔔 " + notif.title, "ok");
+                        if (notif.type === "email") showNotificationBanner(notif);
+                        if (notif.type === "alert") updateAlertBadge();
+                    });
+                }
+            };
+
+            ws.onclose = function() {
+                setTimeout(connectWebSocket, 5000);
+            };
+        }
+
+        function showNotificationBanner(notif) {
+            var banner = document.createElement("div");
+            banner.style.cssText = "position:fixed;top:20px;right:20px;background:var(--card);border:1px solid var(--accent);border-radius:12px;padding:16px 20px;max-width:320px;z-index:9999;box-shadow:0 8px 32px rgba(0,0,0,0.4)";
+            banner.innerHTML =
+                '<div style="font-size:14px;font-weight:600;color:var(--snow);margin-bottom:6px">📧 ' + notif.title + '</div>' +
+                '<div style="font-size:12px;color:var(--fog)">' + notif.message + '</div>' +
+                '<button onclick="this.parentElement.remove()" style="margin-top:8px;font-size:11px;color:var(--accent);background:none;border:none;cursor:pointer">Dismiss</button>';
+            document.body.appendChild(banner);
+            setTimeout(function() { if(banner.parentElement) banner.remove(); }, 8000);
+        }
+
+        function updateAlertBadge() {
+            var alertBtn = document.querySelector('[data-page="alerts"]');
+            if (alertBtn) {
+                alertBtn.innerHTML = '<span class="nav-ico">🔔</span><span class="nav-label">Alerts</span><span style="background:red;color:white;border-radius:50%;padding:2px 6px;font-size:10px;margin-left:4px">!</span>';
+            }
         }
 
         /* ══════════════════════════════════════════
