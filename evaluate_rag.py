@@ -43,6 +43,8 @@ def get_token():
         json={"username": "gow", "password": "abc123456"},
         timeout=30
     )
+    print(f"Login status: {res.status_code}")
+    print(f"Login response: {res.text}")
     return res.json()["access_token"]
 
 def get_rag_response(question: str, token: str):
