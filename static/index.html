@@ -596,11 +596,11 @@
                 "|phone:" + safeText(s.Phone || s["Phone Number"] || s.Mobile) +
                 "|email:" + safeText(s.Email || s.Gmail || s["Email Address"]);
         }
-        function getDisplayName(s) { return safeText(s.Supplier_Name || s.Name || s["Supplier Name"] || "Unknown"); }
-        function getPhone(s) { return safeText(s.Phone || s["Phone Number"] || s.Mobile || "—"); }
-        function getEmail(s) { return safeText(s.Email || s.Gmail || s["Email Address"] || "—"); }
-        function getCity(s) { return safeText(s.City || s.Location || "—"); }
-        function getCategory(s) { return safeText(s.Category || s.Type || "—"); }
+        function getDisplayName(s) { return safeText(s.supplier_name || s.Supplier_Name || s.Name || s["Supplier Name"] || "Unknown"); }
+        function getPhone(s) { return safeText(s.phone || s.Phone || s["Phone Number"] || s.Mobile || "—"); }
+        function getEmail(s) { return safeText(s.contact_email || s.Email || s.Gmail || s["Email Address"] || "—"); }
+        function getCity(s) { return safeText(s.city || s.City || s.Location || "—"); }
+        function getCategory(s) { return safeText(s.category || s.Category || s.Type || "—"); }
         function getRating(s) { return safeText(s.Rating || "—"); }
         function getLeadTime(s) { return safeText(s.Lead_Time_Days || s["Lead Time"] || "—"); }
         function getNotesKey(s) { return "opspilot_notes_" + supplierKey(s); }
