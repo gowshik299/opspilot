@@ -52,21 +52,8 @@ Two separate Cloud Run services:
 - **opspilot** — Main website + FastAPI
 - **opspilot-mcp** — MCP tool server
 
-Auto-deploys on `git push` via Cloud Build triggers.
 
-## 🔧 Environment Variables
 
-```env
-GROQ_API_KEY=
-DATABASE_URL=
-REDIS_URL=
-TAVILY_API_KEY=
-GMAIL=
-APP_PASSWORD=
-LANGSMITH_API_KEY=
-LANGSMITH_PROJECT=
-LANGCHAIN_TRACING_V2=
-```
 
 ## 💬 Example Queries
 
@@ -86,6 +73,3 @@ Power utility company procurement teams. Helps procurement officers:
 - Monitor pending requirements and alerts
 - Send supplier emails with AI-drafted content
 - Get real-time market prices
-
----
-Built by Gowshik — AI Engineer in training 🚀
