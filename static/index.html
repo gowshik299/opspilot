@@ -720,12 +720,13 @@
             }
         }
 
+
         function searchSuppliers() {
             var input = document.getElementById("supplierSearch");
             var q = input ? input.value.trim().toLowerCase() : "";
             var filtered = appState.suppliers.filter(function (s) {
                 return !q || [getDisplayName(s), getPhone(s), getEmail(s), getCity(s), getCategory(s)].join(" ").toLowerCase().includes(q);
-            });
+            })
             renderSuppliersTable(filtered);
         }
 

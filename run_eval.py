@@ -4,6 +4,9 @@
 
 import os
 import sys
+import asyncio
+import numpy as np
+
 sys.path.append('/home/ubuntu/opspilot/opspilot')
 
 from dotenv import load_dotenv
@@ -12,6 +15,7 @@ load_dotenv()
 # ── Imports ───────────────────────────────────────────────────
 from datasets import Dataset
 from ragas import evaluate
+from ragas.run_config import RunConfig
 from ragas.metrics import (
     faithfulness,
     answer_relevancy,
@@ -37,13 +41,21 @@ context_precision.llm = groq_llm
 context_recall.llm = groq_llm
 
 # ── Setup embeddings for answer_relevancy ─────────────────────
-from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings   # updated import
 from ragas.embeddings import LangchainEmbeddingsWrapper
 
 embeddings = LangchainEmbeddingsWrapper(
     HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
 )
 answer_relevancy.embeddings = embeddings
+
+# ── Helper: safely extract a scalar from RAGAS result ─────────
+def scalar(val) -> float:
+    """RAGAS may return a list of per-row scores; return the mean."""
+    if isinstance(val, list):
+        clean = [v for v in val if v is not None and not (isinstance(v, float) and np.isnan(v))]
+        return float(np.mean(clean)) if clean else float("nan")
+    return float(val) if val is not None else float("nan")
 
 # ── Get answers from RAG directly ─────────────────────────────
 def get_rag_answer(question: str) -> tuple:
@@ -87,6 +99,23 @@ def build_dataset():
     })
 
 # ── Run evaluation ─────────────────────────────────────────────
+async def _run_ragas(dataset):
+    """Run RAGAS inside a proper async context to avoid Timeout errors."""
+    return evaluate(
+        dataset=dataset,
+        metrics=[
+            faithfulness,
+            answer_relevancy,
+            context_precision,
+            context_recall,
+        ],
+        run_config=RunConfig(
+            timeout=120,        # seconds per metric call
+            max_retries=3,
+            max_wait=60,
+        ),
+    )
+
 def run_evaluation():
     print("=" * 60)
     print("OpsPilot RAGAS Evaluation")
@@ -96,31 +125,27 @@ def run_evaluation():
     dataset = build_dataset()
 
     print("Running RAGAS metrics...")
-    results = evaluate(
-        dataset=dataset,
-        metrics=[
-            faithfulness,
-            answer_relevancy,
-            context_precision,
-            context_recall,
-        ],
-    )
+
+    # ✅ Fix: run inside asyncio event loop so Timeout works correctly
+    results = asyncio.run(_run_ragas(dataset))
+
+    # ✅ Fix: extract scalar means from per-row lists
+    faith  = scalar(results['faithfulness'])
+    relevancy = scalar(results['answer_relevancy'])
+    precision = scalar(results['context_precision'])
+    recall    = scalar(results['context_recall'])
 
     # Print results
     print("\n" + "=" * 60)
     print("RESULTS")
     print("=" * 60)
-    print(f"Faithfulness:      {results['faithfulness']:.3f}")
-    print(f"Answer Relevancy:  {results['answer_relevancy']:.3f}")
-    print(f"Context Precision: {results['context_precision']:.3f}")
-    print(f"Context Recall:    {results['context_recall']:.3f}")
+    print(f"Faithfulness:      {faith:.3f}")
+    print(f"Answer Relevancy:  {relevancy:.3f}")
+    print(f"Context Precision: {precision:.3f}")
+    print(f"Context Recall:    {recall:.3f}")
 
-    overall = (
-        results['faithfulness'] +
-        results['answer_relevancy'] +
-        results['context_precision'] +
-        results['context_recall']
-    ) / 4
+    scores = [s for s in [faith, relevancy, precision, recall] if not np.isnan(s)]
+    overall = float(np.mean(scores)) if scores else float("nan")
 
     print(f"\nOverall Score:     {overall:.3f}")
 
@@ -133,10 +158,10 @@ def run_evaluation():
 
     # Save results to file
     with open("ragas_results.txt", "w") as f:
-        f.write(f"Faithfulness:      {results['faithfulness']:.3f}\n")
-        f.write(f"Answer Relevancy:  {results['answer_relevancy']:.3f}\n")
-        f.write(f"Context Precision: {results['context_precision']:.3f}\n")
-        f.write(f"Context Recall:    {results['context_recall']:.3f}\n")
+        f.write(f"Faithfulness:      {faith:.3f}\n")
+        f.write(f"Answer Relevancy:  {relevancy:.3f}\n")
+        f.write(f"Context Precision: {precision:.3f}\n")
+        f.write(f"Context Recall:    {recall:.3f}\n")
         f.write(f"Overall Score:     {overall:.3f}\n")
 
     print("\nResults saved to ragas_results.txt!")

@@ -201,7 +201,7 @@ async def chat(req: ChatRequest, _=Depends(get_current_user)):
 def get_suppliers(_=Depends(get_current_user)):
     try:
         from tools import query_db
-        rows = query_db("SELECT supplier_name, city, category, contact_email, phone FROM suppliers")
+        rows = query_db("SELECT * FROM suppliers")
         return rows
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
