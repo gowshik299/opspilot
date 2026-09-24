@@ -7,3 +7,6 @@ __pycache__/
 *.db
 uploads/
 mcp_debug.log
+*.db
+__pycache__/
+%APPDATA%/
